@@ -89,7 +89,7 @@ pub struct Discord {
     #[serde(rename = "userID")]
     pub user_id: i32,
     #[serde(rename = "discordID", deserialize_with = "de_util::string_is_long")]
-    pub discord_id: i64, 
+    pub discord_id: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -150,7 +150,10 @@ pub struct PersonalStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{tests::{setup, Client, async_test}, ApiClient};
+    use crate::{
+        prelude::*,
+        tests::{async_test, setup, Client},
+    };
 
     #[async_test]
     async fn user() {
@@ -158,8 +161,13 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(None)
-            .selections(&[Selection::Basic, Selection::Discord, Selection::Profile, Selection::PersonalStats])
+            .user()
+            .selections(&[
+                Selection::Basic,
+                Selection::Discord,
+                Selection::Profile,
+                Selection::PersonalStats,
+            ])
             .send()
             .await
             .unwrap();
@@ -176,8 +184,9 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(Some(28))
-            .selections(&[ Selection::Profile])
+            .user()
+            .id(28)
+            .selections(&[Selection::Profile])
             .send()
             .await
             .unwrap();

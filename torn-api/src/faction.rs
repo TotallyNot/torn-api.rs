@@ -1,11 +1,8 @@
 use std::collections::BTreeMap;
 
-use chrono::{serde::ts_seconds, DateTime, Utc};
 use serde::Deserialize;
 
 use macros::ApiCategory;
-
-use super::de_util;
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "faction")]
@@ -42,7 +39,10 @@ pub struct Basic {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{tests::{setup, Client, async_test}, ApiClient};
+    use crate::{
+        prelude::*,
+        tests::{async_test, setup, Client},
+    };
 
     #[async_test]
     async fn faction() {
@@ -50,7 +50,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .faction(None)
+            .faction()
             .selections(&[Selection::Basic])
             .send()
             .await
