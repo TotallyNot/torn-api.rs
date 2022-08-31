@@ -1,6 +1,6 @@
 [package]
 name = "torn-key-pool"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,14 +8,20 @@ edition = "2021"
 [features]
 default = [ "postgres" ]
 postgres = [ "dep:sqlx", "dep:chrono", "dep:indoc" ]
+reqwest = [ "dep:reqwest", "torn-api/reqwest" ]
+awc = [ "dep:awc", "torn-api/awc" ]
 
 [dependencies]
 torn-api = { path = "../torn-api", default-features = false }
+async-trait = "0.1"
+thiserror = "1"
+
 sqlx = { version = "0.6", features = [ "postgres", "chrono" ], optional = true }
 chrono = { version = "0.4", optional = true }
 indoc = { version = "1", optional = true }
-async-trait = "0.1"
-thiserror = "1"
+
+reqwest = { version = "0.11", default-features = false, features = [ "json" ], optional = true }
+awc = { version = "3", default-features = false, optional = true }
 
 [dev-dependencies]
 torn-api = { path = "../torn-api", features = [ "reqwest" ] }
@@ -23,4 +29,5 @@ sqlx = { version = "*", features = [ "runtime-tokio-rustls" ] }
 dotenv = "0.15.0"
 tokio = { version = "1.20.1", features = ["test-util", "rt", "macros"] }
 tokio-test = "0.4.2"
-reqwest = { version = "0.11", features = [ "json" ] }
+reqwest = { version = "*", default-features = true }
+awc = { version = "*", features = [ "rustls" ] }
