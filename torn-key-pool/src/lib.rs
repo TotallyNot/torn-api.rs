@@ -127,3 +127,13 @@ where
         KeyPoolExecutor::new(&self.client, &self.storage, domain)
     }
 }
+
+pub trait ApiClientExt: ApiClient {
+    fn with_pool<'a, S>(&'a self, domain: KeyDomain, storage: &'a S) -> KeyPoolExecutor<Self, S>
+    where
+        Self: Sized,
+        S: KeyPoolStorage,
+    {
+        KeyPoolExecutor::new(self, storage, domain)
+    }
+}
