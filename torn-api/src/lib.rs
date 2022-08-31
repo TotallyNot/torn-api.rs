@@ -1,7 +1,7 @@
-#![warn(clippy::all, clippy::perf, clippy::pedantic, clippy::suspicious)]
+#![warn(clippy::all, clippy::perf, clippy::style, clippy::suspicious)]
 
-pub mod user;
 pub mod faction;
+pub mod user;
 
 mod de_util;
 
@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::de::{DeserializeOwned, Error as DeError};
 use thiserror::Error;
-
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -91,46 +90,70 @@ pub trait ApiCategoryResponse {
 
 #[async_trait(?Send)]
 pub trait ApiClient {
-    async fn request(&self, url: String) -> Result<serde_json::Value, Error>;
+    async fn request(&self, url: String) -> Result<ApiResponse, Error>;
+}
 
-    fn torn_api(&self, key: String) -> TornApi<Self>
+pub trait DirectApiClient: ApiClient {
+    fn torn_api(&self, key: String) -> DirectExecutor<Self>
     where
-        Self: Sized;
+        Self: Sized,
+    {
+        DirectExecutor::from_client(self, key)
+    }
+}
+
+pub trait BackedApiClient: ApiClient {}
+
+#[cfg(feature = "reqwest")]
+#[async_trait(?Send)]
+impl crate::ApiClient for reqwest::Client {
+    async fn request(&self, url: String) -> Result<ApiResponse, crate::Error> {
+        let value: serde_json::Value = self.get(url).send().await?.json().await?;
+        Ok(ApiResponse::from_value(value)?)
+    }
 }
 
 #[cfg(feature = "reqwest")]
 #[async_trait(?Send)]
-impl crate::ApiClient for ::reqwest::Client {
-    async fn request(&self, url: String) -> Result<serde_json::Value, crate::Error> {
-        let value = self.get(url).send().await?.json().await?;
-        Ok(value)
-    }
+impl crate::DirectApiClient for reqwest::Client {}
 
-    fn torn_api(&self, key: String) -> crate::TornApi<Self>
-    where
-        Self: Sized,
-    {
-        crate::TornApi::from_client(self, key)
+#[cfg(feature = "awc")]
+#[async_trait(?Send)]
+impl crate::ApiClient for awc::Client {
+    async fn request(&self, url: String) -> Result<ApiResponse, crate::Error> {
+        let value: serde_json::Value = self.get(url).send().await?.json().await?;
+        Ok(ApiResponse::from_value(value)?)
     }
 }
 
 #[cfg(feature = "awc")]
 #[async_trait(?Send)]
-impl crate::ApiClient for awc::Client {
-    async fn request(&self, url: String) -> Result<serde_json::Value, crate::Error> {
-        let value = self.get(url).send().await?.json().await?;
-        Ok(value)
+impl crate::DirectApiClient for awc::Client {}
+
+#[async_trait(?Send)]
+pub trait ApiRequestExecutor<'client> {
+    type Err: std::error::Error;
+
+    async fn excute<A>(&self, request: ApiRequest<A>) -> Result<A, Self::Err>
+    where
+        A: ApiCategoryResponse;
+
+    #[must_use]
+    fn user<'executor>(
+        &'executor self,
+    ) -> ApiRequestBuilder<'client, 'executor, Self, user::Response> {
+        ApiRequestBuilder::new(self)
     }
 
-    fn torn_api(&self, key: String) -> crate::TornApi<Self>
-    where
-        Self: Sized,
-    {
-        crate::TornApi::from_client(self, key)
+    #[must_use]
+    fn faction<'executor>(
+        &'executor self,
+    ) -> ApiRequestBuilder<'client, 'executor, Self, faction::Response> {
+        ApiRequestBuilder::new(self)
     }
 }
 
-pub struct TornApi<'client, C>
+pub struct DirectExecutor<'client, C>
 where
     C: ApiClient,
 {
@@ -138,7 +161,7 @@ where
     key: String,
 }
 
-impl<'client, C> TornApi<'client, C>
+impl<'client, C> DirectExecutor<'client, C>
 where
     C: ApiClient,
 {
@@ -146,73 +169,144 @@ where
     pub(crate) fn from_client(client: &'client C, key: String) -> Self {
         Self { client, key }
     }
+}
 
-    #[must_use]
-    pub fn user(self, id: Option<u64>) -> ApiRequestBuilder<'client, C, user::Response> {
-        ApiRequestBuilder::new(self.client, self.key, id)
-    }
+#[async_trait(?Send)]
+impl<'client, C> ApiRequestExecutor<'client> for DirectExecutor<'client, C>
+where
+    C: ApiClient,
+{
+    type Err = Error;
 
-    #[must_use]
-    pub fn faction(self, id: Option<u64>) -> ApiRequestBuilder<'client, C, faction::Response> {
-        ApiRequestBuilder::new(self.client, self.key, id)
+    async fn excute<A>(&self, request: ApiRequest<A>) -> Result<A, Self::Err>
+    where
+        A: ApiCategoryResponse,
+    {
+        let url = request.url(&self.key);
+
+        self.client.request(url).await.map(A::from_response)
     }
 }
 
-pub struct ApiRequestBuilder<'client, C, A>
+#[derive(Debug)]
+pub struct ApiRequest<A>
 where
-    C: ApiClient,
     A: ApiCategoryResponse,
 {
-    client: &'client C,
-    key: String,
-    phantom: std::marker::PhantomData<A>,
     selections: Vec<&'static str>,
     id: Option<u64>,
     from: Option<DateTime<Utc>>,
     to: Option<DateTime<Utc>>,
     comment: Option<String>,
+    phantom: std::marker::PhantomData<A>,
 }
 
-impl<'client, C, A> ApiRequestBuilder<'client, C, A>
+impl<A> std::default::Default for ApiRequest<A>
 where
-    C: ApiClient,
     A: ApiCategoryResponse,
 {
-    pub(crate) fn new(client: &'client C, key: String, id: Option<u64>) -> Self {
+    fn default() -> Self {
         Self {
-            client,
-            key,
-            phantom: std::marker::PhantomData,
-            selections: Vec::new(),
-            id,
+            selections: Vec::default(),
+            id: None,
             from: None,
             to: None,
             comment: None,
+            phantom: std::marker::PhantomData::default(),
+        }
+    }
+}
+
+impl<A> ApiRequest<A>
+where
+    A: ApiCategoryResponse,
+{
+    pub fn url(&self, key: &str) -> String {
+        let mut query_fragments = vec![
+            format!("selections={}", self.selections.join(",")),
+            format!("key={}", key),
+        ];
+
+        if let Some(from) = self.from {
+            query_fragments.push(format!("from={}", from.timestamp()));
+        }
+
+        if let Some(to) = self.to {
+            query_fragments.push(format!("to={}", to.timestamp()));
+        }
+
+        if let Some(comment) = &self.comment {
+            query_fragments.push(format!("comment={}", comment));
+        }
+
+        let query = query_fragments.join("&");
+
+        let id_fragment = match self.id {
+            Some(id) => id.to_string(),
+            None => "".to_owned(),
+        };
+
+        format!(
+            "https://api.torn.com/{}/{}?{}",
+            A::Selection::category(),
+            id_fragment,
+            query
+        )
+    }
+}
+
+pub struct ApiRequestBuilder<'client, 'executor, E, A>
+where
+    E: ApiRequestExecutor<'client> + ?Sized,
+    A: ApiCategoryResponse,
+{
+    executor: &'executor E,
+    request: ApiRequest<A>,
+    _phantom: std::marker::PhantomData<&'client E>,
+}
+
+impl<'client, 'executor, E, A> ApiRequestBuilder<'client, 'executor, E, A>
+where
+    E: ApiRequestExecutor<'client> + ?Sized,
+    A: ApiCategoryResponse,
+{
+    pub(crate) fn new(executor: &'executor E) -> Self {
+        Self {
+            executor,
+            request: ApiRequest::default(),
+            _phantom: std::marker::PhantomData::default(),
         }
     }
 
     #[must_use]
+    pub fn id(mut self, id: u64) -> Self {
+        self.request.id = Some(id);
+        self
+    }
+
+    #[must_use]
     pub fn selections(mut self, selections: &[A::Selection]) -> Self {
-        self.selections
+        self.request
+            .selections
             .append(&mut selections.iter().map(ApiSelection::raw_value).collect());
         self
     }
 
     #[must_use]
     pub fn from(mut self, from: DateTime<Utc>) -> Self {
-        self.from = Some(from);
+        self.request.from = Some(from);
         self
     }
 
     #[must_use]
     pub fn to(mut self, to: DateTime<Utc>) -> Self {
-        self.to = Some(to);
+        self.request.to = Some(to);
         self
     }
 
     #[must_use]
     pub fn comment(mut self, comment: String) -> Self {
-        self.comment = Some(comment);
+        self.request.comment = Some(comment);
         self
     }
 
@@ -221,14 +315,14 @@ where
     /// # Examples
     ///
     /// ```no_run
-    /// use torn_api::{ApiClient, Error};
+    /// use torn_api::{prelude::*, Error};
     /// use reqwest::Client;
     /// # async {
     ///
     /// let key = "XXXXXXXXX".to_owned();
     /// let response = Client::new()
     ///     .torn_api(key)
-    ///     .user(None)
+    ///     .user()
     ///     .send()
     ///     .await;
     ///
@@ -241,57 +335,28 @@ where
     ///
     /// Will return an `Err` if the API returns an API error, the request fails due to a network
     /// error, or if the response body doesn't contain valid json.
-    pub async fn send(self) -> Result<A, Error> {
-        let mut query_fragments = vec![
-            format!("selections={}", self.selections.join(",")),
-            format!("key={}", self.key),
-        ];
-
-        if let Some(from) = self.from {
-            query_fragments.push(format!("from={}", from.timestamp()));
-        }
-
-        if let Some(to) = self.to {
-            query_fragments.push(format!("to={}", to.timestamp()));
-        }
-
-        if let Some(comment) = self.comment {
-            query_fragments.push(format!("comment={}", comment));
-        }
-
-        let query = query_fragments.join("&");
-
-        let id_fragment = match self.id {
-            Some(id) => id.to_string(),
-            None => "".to_owned(),
-        };
-
-        let url = format!(
-            "https://api.torn.com/{}/{}?{}",
-            A::Selection::category(),
-            id_fragment,
-            query
-        );
-
-        let value = self.client.request(url).await?;
-
-        ApiResponse::from_value(value).map(A::from_response)
+    pub async fn send(self) -> Result<A, <E as ApiRequestExecutor<'client>>::Err> {
+        self.executor.excute(self.request).await
     }
+}
+
+pub mod prelude {
+    pub use super::{ApiClient, ApiRequestExecutor, DirectApiClient};
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Once;
 
-    #[cfg(feature = "reqwest")]
-    pub use reqwest::Client;
     #[cfg(all(not(feature = "reqwest"), feature = "awc"))]
     pub use awc::Client;
-
     #[cfg(feature = "reqwest")]
-    pub use tokio::test as async_test;
+    pub use reqwest::Client;
+
     #[cfg(all(not(feature = "reqwest"), feature = "awc"))]
     pub use actix_rt::test as async_test;
+    #[cfg(feature = "reqwest")]
+    pub use tokio::test as async_test;
 
     use super::*;
 
@@ -316,7 +381,7 @@ pub(crate) mod tests {
 
         reqwest::Client::default()
             .torn_api(key)
-            .user(None)
+            .user()
             .send()
             .await
             .unwrap();
