@@ -128,7 +128,7 @@ where
     }
 }
 
-pub trait ApiClientExt: ApiClient {
+pub trait KeyPoolClient: ApiClient {
     fn with_pool<'a, S>(&'a self, domain: KeyDomain, storage: &'a S) -> KeyPoolExecutor<Self, S>
     where
         Self: Sized,
@@ -137,3 +137,9 @@ pub trait ApiClientExt: ApiClient {
         KeyPoolExecutor::new(self, storage, domain)
     }
 }
+
+#[cfg(feature = "reqwest")]
+impl KeyPoolClient for reqwest::Client {}
+
+#[cfg(feature = "awc")]
+impl KeyPoolClient for awc::Client {}
