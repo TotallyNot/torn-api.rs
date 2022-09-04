@@ -150,10 +150,7 @@ pub struct PersonalStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        prelude::*,
-        tests::{async_test, setup, Client},
-    };
+    use crate::tests::{async_test, setup, Client, ClientTrait};
 
     #[async_test]
     async fn user() {
@@ -161,14 +158,14 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user()
-            .selections(&[
-                Selection::Basic,
-                Selection::Discord,
-                Selection::Profile,
-                Selection::PersonalStats,
-            ])
-            .send()
+            .user(|b| {
+                b.selections(&[
+                    Selection::Basic,
+                    Selection::Discord,
+                    Selection::Profile,
+                    Selection::PersonalStats,
+                ])
+            })
             .await
             .unwrap();
 
@@ -184,10 +181,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user()
-            .id(28)
-            .selections(&[Selection::Profile])
-            .send()
+            .user(|b| b.id(28).selections(&[Selection::Profile]))
             .await
             .unwrap();
 

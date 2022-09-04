@@ -39,10 +39,7 @@ pub struct Basic {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        prelude::*,
-        tests::{async_test, setup, Client},
-    };
+    use crate::tests::{async_test, setup, Client, ClientTrait};
 
     #[async_test]
     async fn faction() {
@@ -50,9 +47,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .faction()
-            .selections(&[Selection::Basic])
-            .send()
+            .faction(|b| b.selections(&[Selection::Basic]))
             .await
             .unwrap();
 
