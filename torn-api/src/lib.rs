@@ -11,7 +11,7 @@ use serde::de::{DeserializeOwned, Error as DeError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum Error {
+pub enum ClientError {
     #[error("api returned error '{reason}', code = '{code}'")]
     Api { code: u8, reason: String },
 
@@ -36,7 +36,7 @@ pub struct ApiResponse {
 }
 
 impl ApiResponse {
-    fn from_value(mut value: serde_json::Value) -> Result<Self, Error> {
+    fn from_value(mut value: serde_json::Value) -> Result<Self, ClientError> {
         #[derive(serde::Deserialize)]
         struct ApiErrorDto {
             code: u8,
@@ -46,7 +46,7 @@ impl ApiResponse {
         match value.get_mut("error") {
             Some(error) => {
                 let dto: ApiErrorDto = serde_json::from_value(error.take())?;
-                Err(Error::Api {
+                Err(ClientError::Api {
                     code: dto.code,
                     reason: dto.reason,
                 })
@@ -82,15 +82,22 @@ pub trait ApiSelection {
     fn category() -> &'static str;
 }
 
-pub trait ApiCategoryResponse {
+pub trait ApiCategoryResponse: Send + Sync {
     type Selection: ApiSelection;
 
     fn from_response(response: ApiResponse) -> Self;
 }
 
+#[cfg(feature = "awc")]
 #[async_trait(?Send)]
 pub trait ApiClient {
-    async fn request(&self, url: String) -> Result<ApiResponse, Error>;
+    async fn request(&self, url: String) -> Result<ApiResponse, ClientError>;
+}
+
+#[cfg(not(feature = "awc"))]
+#[async_trait]
+pub trait ApiClient: Send + Sync {
+    async fn request(&self, url: String) -> Result<ApiResponse, ClientError>;
 }
 
 pub trait DirectApiClient: ApiClient {
@@ -105,32 +112,32 @@ pub trait DirectApiClient: ApiClient {
 pub trait BackedApiClient: ApiClient {}
 
 #[cfg(feature = "reqwest")]
-#[async_trait(?Send)]
+#[cfg_attr(feature = "awc", async_trait(?Send))]
+#[cfg_attr(not(feature = "awc"), async_trait)]
 impl crate::ApiClient for reqwest::Client {
-    async fn request(&self, url: String) -> Result<ApiResponse, crate::Error> {
+    async fn request(&self, url: String) -> Result<ApiResponse, crate::ClientError> {
         let value: serde_json::Value = self.get(url).send().await?.json().await?;
         Ok(ApiResponse::from_value(value)?)
     }
 }
 
 #[cfg(feature = "reqwest")]
-#[async_trait(?Send)]
 impl crate::DirectApiClient for reqwest::Client {}
 
 #[cfg(feature = "awc")]
 #[async_trait(?Send)]
 impl crate::ApiClient for awc::Client {
-    async fn request(&self, url: String) -> Result<ApiResponse, crate::Error> {
+    async fn request(&self, url: String) -> Result<ApiResponse, crate::ClientError> {
         let value: serde_json::Value = self.get(url).send().await?.json().await?;
         Ok(ApiResponse::from_value(value)?)
     }
 }
 
 #[cfg(feature = "awc")]
-#[async_trait(?Send)]
 impl crate::DirectApiClient for awc::Client {}
 
-#[async_trait(?Send)]
+#[cfg_attr(feature = "awc", async_trait(?Send))]
+#[cfg_attr(not(feature = "awc"), async_trait)]
 pub trait ApiRequestExecutor<'client> {
     type Err: std::error::Error;
 
@@ -171,12 +178,13 @@ where
     }
 }
 
-#[async_trait(?Send)]
+#[cfg_attr(feature = "awc", async_trait(?Send))]
+#[cfg_attr(not(feature = "awc"), async_trait)]
 impl<'client, C> ApiRequestExecutor<'client> for DirectExecutor<'client, C>
 where
     C: ApiClient,
 {
-    type Err = Error;
+    type Err = ClientError;
 
     async fn excute<A>(&self, request: ApiRequest<A>) -> Result<A, Self::Err>
     where
@@ -315,7 +323,7 @@ where
     /// # Examples
     ///
     /// ```no_run
-    /// use torn_api::{prelude::*, Error};
+    /// use torn_api::{prelude::*, ClientError};
     /// use reqwest::Client;
     /// # async {
     ///
@@ -327,7 +335,7 @@ where
     ///     .await;
     ///
     /// // invalid key
-    /// assert!(matches!(response, Err(Error::Api { code: 2, .. })));
+    /// assert!(matches!(response, Err(ClientError::Api { code: 2, .. })));
     /// # };
     /// ```
     ///
@@ -394,7 +402,7 @@ pub(crate) mod tests {
 
         awc::Client::default()
             .torn_api(key)
-            .user(None)
+            .user()
             .send()
             .await
             .unwrap();
