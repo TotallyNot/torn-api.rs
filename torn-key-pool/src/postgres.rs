@@ -67,9 +67,9 @@ impl PgKeyPoolStorage {
 impl KeyPoolStorage for PgKeyPoolStorage {
     type Key = PgKey;
 
-    type Err = PgStorageError;
+    type Error = PgStorageError;
 
-    async fn acquire_key(&self, domain: KeyDomain) -> Result<Self::Key, Self::Err> {
+    async fn acquire_key(&self, domain: KeyDomain) -> Result<Self::Key, Self::Error> {
         let predicate = match domain {
             KeyDomain::Public => "".to_owned(),
             KeyDomain::User(id) => format!("where and user_id={} and user", id),
@@ -117,7 +117,7 @@ impl KeyPoolStorage for PgKeyPoolStorage {
         key.ok_or(PgStorageError::Unavailable(domain))
     }
 
-    async fn flag_key(&self, key: Self::Key, code: u8) -> Result<bool, Self::Err> {
+    async fn flag_key(&self, key: Self::Key, code: u8) -> Result<bool, Self::Error> {
         // TODO: put keys in cooldown when appropriate
         match code {
             2 | 10 | 13 => {
