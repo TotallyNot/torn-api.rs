@@ -63,7 +63,7 @@ impl PgKeyPoolStorage {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl KeyPoolStorage for PgKeyPoolStorage {
     type Key = PgKey;
 

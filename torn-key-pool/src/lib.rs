@@ -11,13 +11,13 @@ use torn_api::prelude::*;
 #[derive(Debug, Error)]
 pub enum KeyPoolError<S>
 where
-    S: std::error::Error + std::fmt::Debug,
+    S: Sync + Send + std::error::Error,
 {
     #[error("Key pool storage driver error: {0:?}")]
     Storage(#[source] S),
 
     #[error(transparent)]
-    Client(#[from] torn_api::Error),
+    Client(#[from] torn_api::ClientError),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -27,14 +27,14 @@ pub enum KeyDomain {
     Faction(i32),
 }
 
-pub trait ApiKey {
+pub trait ApiKey: Sync + Send {
     fn value(&self) -> &str;
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait KeyPoolStorage {
     type Key: ApiKey;
-    type Err: std::error::Error;
+    type Err: Sync + Send + std::error::Error;
 
     async fn acquire_key(&self, domain: KeyDomain) -> Result<Self::Key, Self::Err>;
 
@@ -66,11 +66,12 @@ where
     }
 }
 
-#[async_trait(?Send)]
+#[cfg_attr(feature = "awc", async_trait(?Send))]
+#[cfg_attr(not(feature = "awc"), async_trait)]
 impl<'client, C, S> ApiRequestExecutor<'client> for KeyPoolExecutor<'client, C, S>
 where
     C: ApiClient,
-    S: KeyPoolStorage + 'static,
+    S: KeyPoolStorage + Send + Sync + 'static,
 {
     type Err = KeyPoolError<S::Err>;
 
@@ -88,7 +89,7 @@ where
             let res = self.client.request(url).await;
 
             match res {
-                Err(torn_api::Error::Api { code, .. }) => {
+                Err(torn_api::ClientError::Api { code, .. }) => {
                     if !self
                         .storage
                         .flag_key(key, code)

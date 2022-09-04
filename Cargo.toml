@@ -1,2 +1,3 @@
 [workspace]
+resolver = "2"
 members = [ "macros", "torn-api", "torn-key-pool" ]
