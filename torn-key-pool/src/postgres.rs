@@ -127,8 +127,7 @@ impl KeyPoolStorage for PgKeyPoolStorage {
                     .await?;
                 Ok(true)
             }
-            9 => Ok(false),
-            _ => Ok(true),
+            _ => Ok(false),
         }
     }
 }
