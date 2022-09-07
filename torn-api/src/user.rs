@@ -21,7 +21,7 @@ pub enum Selection {
     PersonalStats,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum Gender {
     Male,
     Female,
@@ -47,7 +47,7 @@ pub struct Faction {
     pub faction_tag: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum State {
     Okay,
     Traveling,
@@ -58,7 +58,7 @@ pub enum State {
     Fallen,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StateColour {
     Green,
@@ -102,7 +102,7 @@ pub struct LifeBar {
     pub increment: i16,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum EliminationTeam {
     Firestarters,
