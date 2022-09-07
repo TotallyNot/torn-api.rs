@@ -1,5 +1,8 @@
 use chrono::{serde::ts_seconds, DateTime, Utc};
-use serde::Deserialize;
+use serde::{
+    de::{self, MapAccess, Visitor},
+    Deserialize, Deserializer,
+};
 
 use macros::ApiCategory;
 
@@ -100,6 +103,138 @@ pub struct LifeBar {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EliminationTeam {
+    Firestarters,
+    HardBoiled,
+    QuackAddicts,
+    RainMen,
+    TotallyBoned,
+    RawringThunder,
+    DirtyCops,
+    LaughingStock,
+    JeanTherapy,
+    #[serde(rename = "statants-soldiers")]
+    SatansSoldiers,
+    WolfPack,
+    Sleepyheads,
+}
+
+#[derive(Debug, Clone)]
+pub enum Competition {
+    Elimination {
+        score: i16,
+        attacks: i16,
+        team: EliminationTeam,
+    },
+}
+
+fn deserialize_comp<'de, D>(deserializer: D) -> Result<Option<Competition>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    enum Field {
+        Name,
+        Score,
+        Team,
+        Attacks,
+    }
+
+    #[derive(Deserialize)]
+    enum CompetitionName {
+        Elimination,
+    }
+
+    struct CompetitionVisitor;
+
+    impl<'de> Visitor<'de> for CompetitionVisitor {
+        type Value = Option<Competition>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("struct Competition")
+        }
+
+        fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+        where
+            V: MapAccess<'de>,
+        {
+            let mut team: Option<EliminationTeam> = None;
+            let mut score = None;
+            let mut attacks = None;
+            let mut name: Option<CompetitionName> = None;
+
+            while let Some(key) = map.next_key()? {
+                match key {
+                    Field::Name => {
+                        name = Some(map.next_value()?);
+                    }
+                    Field::Score => {
+                        score = Some(map.next_value()?);
+                    }
+                    Field::Attacks => {
+                        attacks = Some(map.next_value()?);
+                    }
+                    Field::Team => {
+                        let team_raw: String = map.next_value()?;
+                        team = if team_raw.is_empty() {
+                            None
+                        } else {
+                            Some(match team_raw.as_str() {
+                                "firestarters" => EliminationTeam::Firestarters,
+                                "hard-boiled" => EliminationTeam::HardBoiled,
+                                "quack-addicts" => EliminationTeam::QuackAddicts,
+                                "rain-men" => EliminationTeam::RainMen,
+                                "totally-boned" => EliminationTeam::TotallyBoned,
+                                "rawring-thunder" => EliminationTeam::RawringThunder,
+                                "dirty-cops" => EliminationTeam::DirtyCops,
+                                "laughing-stock" => EliminationTeam::LaughingStock,
+                                "jean-therapy" => EliminationTeam::JeanTherapy,
+                                "satants-soldiers" => EliminationTeam::SatansSoldiers,
+                                "wolf-pack" => EliminationTeam::WolfPack,
+                                "sleepyheads" => EliminationTeam::Sleepyheads,
+                                _ => Err(de::Error::unknown_variant(
+                                    &team_raw,
+                                    &[
+                                        "firestarters",
+                                        "hard-boiled",
+                                        "quack-addicts",
+                                        "rain-men",
+                                        "totally-boned",
+                                        "rawring-thunder",
+                                        "dirty-cops",
+                                        "laughing-stock",
+                                        "jean-therapy",
+                                        "satants-soldiers",
+                                        "wolf-pack",
+                                        "sleepyheads",
+                                    ],
+                                ))?,
+                            })
+                        }
+                    }
+                }
+            }
+
+            match (name, team, score, attacks) {
+                (Some(CompetitionName::Elimination), Some(team), Some(score), Some(attacks)) => {
+                    Ok(Some(Competition::Elimination {
+                        team,
+                        score,
+                        attacks,
+                    }))
+                }
+                _ => Ok(None),
+            }
+        }
+    }
+
+    const FIELDS: &[&str] = &["name", "score", "team", "attacks"];
+    deserializer.deserialize_struct("Competition", FIELDS, CompetitionVisitor)
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Profile {
     pub player_id: i32,
     pub name: String,
@@ -112,6 +247,9 @@ pub struct Profile {
     pub last_action: LastAction,
     pub faction: Faction,
     pub status: Status,
+
+    #[serde(deserialize_with = "deserialize_comp")]
+    pub competition: Option<Competition>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -192,5 +330,47 @@ mod tests {
         assert!(faction.faction_tag.is_none());
         assert!(faction.days_in_faction.is_none());
         assert!(faction.position.is_none());
+    }
+
+    #[async_test]
+    async fn team_visible() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .user(|b| b.selections(&[Selection::Profile]))
+            .await
+            .unwrap();
+
+        let profile = response.profile().unwrap();
+        assert!(profile.competition.is_some());
+    }
+
+    #[async_test]
+    async fn team_invisible() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .user(|b| b.id(2526617).selections(&[Selection::Profile]))
+            .await
+            .unwrap();
+
+        let profile = response.profile().unwrap();
+        assert!(profile.competition.is_none());
+    }
+
+    #[async_test]
+    async fn team_none() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .user(|b| b.id(2681712).selections(&[Selection::Profile]))
+            .await
+            .unwrap();
+
+        let profile = response.profile().unwrap();
+        assert!(profile.competition.is_none());
     }
 }
