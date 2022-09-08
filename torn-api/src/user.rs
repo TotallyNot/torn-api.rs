@@ -4,7 +4,7 @@ use serde::{
     Deserialize, Deserializer,
 };
 
-use macros::ApiCategory;
+use torn_api_macros::ApiCategory;
 
 use super::de_util;
 

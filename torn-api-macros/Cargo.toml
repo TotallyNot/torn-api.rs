@@ -1,0 +1,17 @@
+[package]
+name = "torn-api-macros"
+version = "0.1.0"
+edition = "2021"
+authors = ["Pyrit [2111649]"]
+license = "MIT"
+repository = "https://github.com/TotallyNot/torn-api.rs.git"
+homepage = "https://github.com/TotallyNot/torn-api.rs.git"
+description = "Macros implementation of #[derive(ApiCategory)]"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0", features = [ "extra-traits" ] }
+quote = "1.0"
+convert_case = "0.5"
