@@ -13,6 +13,7 @@ mod de_util;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use num_traits::{AsPrimitive, PrimInt};
 use serde::de::{DeserializeOwned, Error as DeError};
 use thiserror::Error;
 
@@ -363,8 +364,11 @@ where
     }
 
     #[must_use]
-    pub fn id(mut self, id: u64) -> Self {
-        self.request.id = Some(id);
+    pub fn id<I>(mut self, id: I) -> Self
+    where
+        I: PrimInt + AsPrimitive<u64>,
+    {
+        self.request.id = Some(id.as_());
         self
     }
 
