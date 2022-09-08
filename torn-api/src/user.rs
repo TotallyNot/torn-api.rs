@@ -34,17 +34,96 @@ pub struct LastAction {
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Faction {
-    #[serde(deserialize_with = "de_util::zero_is_none")]
-    pub faction_id: Option<i32>,
-    #[serde(deserialize_with = "de_util::none_is_none")]
-    pub faction_name: Option<String>,
-    #[serde(deserialize_with = "de_util::zero_is_none")]
-    pub days_in_faction: Option<i16>,
-    #[serde(deserialize_with = "de_util::none_is_none")]
-    pub position: Option<String>,
+    pub faction_id: i32,
+    pub faction_name: String,
+    pub days_in_faction: i16,
+    pub position: String,
     pub faction_tag: Option<String>,
+}
+
+fn deserialize_faction<'de, D>(deserializer: D) -> Result<Option<Faction>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    enum Field {
+        FactionId,
+        FactionName,
+        DaysInFaction,
+        Position,
+        FactionTag,
+    }
+
+    struct FactionVisitor;
+
+    impl<'de> Visitor<'de> for FactionVisitor {
+        type Value = Option<Faction>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("struct Faction")
+        }
+
+        fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+        where
+            V: MapAccess<'de>,
+        {
+            let mut faction_id = None;
+            let mut faction_name = None;
+            let mut days_in_faction = None;
+            let mut position = None;
+            let mut faction_tag = None;
+
+            while let Some(key) = map.next_key()? {
+                match key {
+                    Field::FactionId => {
+                        faction_id = Some(map.next_value()?);
+                    }
+                    Field::FactionName => {
+                        faction_name = Some(map.next_value()?);
+                    }
+                    Field::DaysInFaction => {
+                        days_in_faction = Some(map.next_value()?);
+                    }
+                    Field::Position => {
+                        position = Some(map.next_value()?);
+                    }
+                    Field::FactionTag => {
+                        faction_tag = map.next_value()?;
+                    }
+                }
+            }
+            let faction_id = faction_id.ok_or_else(|| de::Error::missing_field("faction_id"))?;
+            let faction_name =
+                faction_name.ok_or_else(|| de::Error::missing_field("faction_name"))?;
+            let days_in_faction =
+                days_in_faction.ok_or_else(|| de::Error::missing_field("days_in_faction"))?;
+            let position = position.ok_or_else(|| de::Error::missing_field("position"))?;
+
+            if faction_id == 0 {
+                Ok(None)
+            } else {
+                Ok(Some(Faction {
+                    faction_id,
+                    faction_name,
+                    days_in_faction,
+                    position,
+                    faction_tag,
+                }))
+            }
+        }
+    }
+
+    const FIELDS: &[&str] = &[
+        "faction_id",
+        "faction_name",
+        "days_in_faction",
+        "position",
+        "faction_tag",
+    ];
+    deserializer.deserialize_struct("Faction", FIELDS, FactionVisitor)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -92,7 +171,7 @@ pub struct Discord {
     #[serde(rename = "userID")]
     pub user_id: i32,
     #[serde(rename = "discordID", deserialize_with = "de_util::string_is_long")]
-    pub discord_id: i64,
+    pub discord_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -160,10 +239,10 @@ where
         where
             V: MapAccess<'de>,
         {
-            let mut team: Option<EliminationTeam> = None;
+            let mut team = None;
             let mut score = None;
             let mut attacks = None;
-            let mut name: Option<CompetitionName> = None;
+            let mut name = None;
 
             while let Some(key) = map.next_key()? {
                 match key {
@@ -217,21 +296,27 @@ where
                 }
             }
 
-            match (name, team, score, attacks) {
-                (Some(CompetitionName::Elimination), Some(team), Some(score), Some(attacks)) => {
-                    Ok(Some(Competition::Elimination {
-                        team,
-                        score,
-                        attacks,
-                    }))
+            let name = name.ok_or_else(|| de::Error::missing_field("name"))?;
+
+            match name {
+                CompetitionName::Elimination => {
+                    if let Some(team) = team {
+                        let score = score.ok_or_else(|| de::Error::missing_field("score"))?;
+                        let attacks = attacks.ok_or_else(|| de::Error::missing_field("attacks"))?;
+                        Ok(Some(Competition::Elimination {
+                            team,
+                            score,
+                            attacks,
+                        }))
+                    } else {
+                        Ok(None)
+                    }
                 }
-                _ => Ok(None),
             }
         }
     }
 
-    const FIELDS: &[&str] = &["name", "score", "team", "attacks"];
-    deserializer.deserialize_struct("Competition", FIELDS, CompetitionVisitor)
+    deserializer.deserialize_map(CompetitionVisitor)
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -245,7 +330,8 @@ pub struct Profile {
 
     pub life: LifeBar,
     pub last_action: LastAction,
-    pub faction: Faction,
+    #[serde(deserialize_with = "deserialize_faction")]
+    pub faction: Option<Faction>,
     pub status: Status,
 
     #[serde(deserialize_with = "deserialize_comp")]
@@ -325,11 +411,7 @@ mod tests {
 
         let faction = response.profile().unwrap().faction;
 
-        assert!(faction.faction_id.is_none());
-        assert!(faction.faction_name.is_none());
-        assert!(faction.faction_tag.is_none());
-        assert!(faction.days_in_faction.is_none());
-        assert!(faction.position.is_none());
+        assert!(faction.is_none());
     }
 
     #[async_test]

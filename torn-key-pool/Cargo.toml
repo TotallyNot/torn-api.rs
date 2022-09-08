@@ -1,6 +1,6 @@
 [package]
 name = "torn-key-pool"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/TotallyNot/torn-api.rs.git"
@@ -16,7 +16,7 @@ reqwest = [ "dep:reqwest", "torn-api/reqwest" ]
 awc = [ "dep:awc", "torn-api/awc" ]
 
 [dependencies]
-torn-api = { path = "../torn-api", default-features = false, version = "0.3" }
+torn-api = { path = "../torn-api", default-features = false, version = "0.4" }
 async-trait = "0.1"
 thiserror = "1"
 
