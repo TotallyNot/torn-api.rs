@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use macros::ApiCategory;
+use torn_api_macros::ApiCategory;
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "faction")]

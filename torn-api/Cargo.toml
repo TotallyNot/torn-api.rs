@@ -2,6 +2,11 @@
 name = "torn-api"
 version = "0.3.2"
 edition = "2021"
+authors = ["Pyrit [2111649]"]
+license = "MIT"
+repository = "https://github.com/TotallyNot/torn-api.rs.git"
+homepage = "https://github.com/TotallyNot/torn-api.rs.git"
+description = "Torn API bindings for rust"
 
 [features]
 default = [ "reqwest" ]
@@ -19,12 +24,12 @@ num-traits = "0.2"
 reqwest = { version = "0.11", default-features = false, features = [ "json" ], optional = true }
 awc = { version = "3", default-features = false, optional = true }
 
-macros = { path = "../macros" }
+torn-api-macros = { path = "../torn-api-macros", version = "0.1" }
 
 [dev-dependencies]
 actix-rt = { version = "2.7.0" }
 dotenv = "0.15.0"
 tokio = { version = "1.20.1", features = ["test-util", "rt", "macros"] }
 tokio-test = "0.4.2"
-reqwest = { version = "*", default-features = true }
-awc = { version = "*", features = [ "rustls" ] }
+reqwest = { version = "0.11", default-features = true }
+awc = { version = "3", features = [ "rustls" ] }
