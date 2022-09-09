@@ -19,6 +19,8 @@ pub enum Selection {
     Discord,
     #[api(type = "PersonalStats", field = "personalstats")]
     PersonalStats,
+    #[api(type = "CriminalRecord", field = "criminalrecord")]
+    Crimes,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -371,6 +373,19 @@ pub struct PersonalStats {
     pub best_damage: i32,
 }
 
+#[derive(Deserialize)]
+pub struct CriminalRecord {
+    pub selling_illegal_products: i32,
+    pub theft: i32,
+    pub auto_theft: i32,
+    pub drug_deals: i32,
+    pub computer_crimes: i32,
+    pub murder: i32,
+    pub fraud_crimes: i32,
+    pub other: i32,
+    pub total: i32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -388,6 +403,7 @@ mod tests {
                     Selection::Discord,
                     Selection::Profile,
                     Selection::PersonalStats,
+                    Selection::Crimes,
                 ])
             })
             .await
