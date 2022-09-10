@@ -215,12 +215,13 @@ where
     D: Deserializer<'de>,
 {
     #[derive(Deserialize)]
-    #[serde(rename_all = "lowercase")]
+    #[serde(rename_all = "camelCase")]
     enum Field {
         Name,
         Score,
         Team,
         Attacks,
+        TeamName,
     }
 
     #[derive(Deserialize)]
@@ -295,6 +296,7 @@ where
                             })
                         }
                     }
+                    _ => (),
                 }
             }
 
@@ -413,6 +415,7 @@ mod tests {
         response.discord().unwrap();
         response.profile().unwrap();
         response.personal_stats().unwrap();
+        response.crimes().unwrap();
     }
 
     #[async_test]
@@ -442,33 +445,5 @@ mod tests {
 
         let profile = response.profile().unwrap();
         assert!(profile.competition.is_some());
-    }
-
-    #[async_test]
-    async fn team_invisible() {
-        let key = setup();
-
-        let response = Client::default()
-            .torn_api(key)
-            .user(|b| b.id(2526617).selections(&[Selection::Profile]))
-            .await
-            .unwrap();
-
-        let profile = response.profile().unwrap();
-        assert!(profile.competition.is_none());
-    }
-
-    #[async_test]
-    async fn team_none() {
-        let key = setup();
-
-        let response = Client::default()
-            .torn_api(key)
-            .user(|b| b.id(2681712).selections(&[Selection::Profile]))
-            .await
-            .unwrap();
-
-        let profile = response.profile().unwrap();
-        assert!(profile.competition.is_none());
     }
 }
