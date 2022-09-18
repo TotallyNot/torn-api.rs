@@ -399,7 +399,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(None, |b| {
+            .user(|b| {
                 b.selections(&[
                     Selection::Basic,
                     Selection::Discord,
@@ -424,7 +424,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(Some(28), |b| b.selections(&[Selection::Profile]))
+            .user(|b| b.id(28).selections(&[Selection::Profile]))
             .await
             .unwrap();
 
@@ -439,7 +439,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(None, |b| b.selections(&[Selection::Profile]))
+            .user(|b| b.selections(&[Selection::Profile]))
             .await
             .unwrap();
 
@@ -453,10 +453,27 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .users([1, 2111649], |b| b.selections(&[Selection::Basic]))
+            .users([1, 2111649, 374272176892674048i64], |b| {
+                b.selections(&[Selection::Basic])
+            })
             .await;
 
         response.get(&1).as_ref().unwrap().as_ref().unwrap();
         response.get(&2111649).as_ref().unwrap().as_ref().unwrap();
+    }
+
+    #[async_test]
+    async fn discord() {
+        let key = setup();
+
+        let basic = Client::default()
+            .torn_api(key)
+            .user(|b| b.id(374272176892674048i64).selections(&[Selection::Basic]))
+            .await
+            .unwrap()
+            .basic()
+            .unwrap();
+
+        assert_eq!(basic.player_id, 2111649);
     }
 }

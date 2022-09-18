@@ -91,7 +91,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .torn(None, |b| b.selections(&[Selection::Competition]))
+            .torn(|b| b.selections(&[Selection::Competition]))
             .await
             .unwrap();
 

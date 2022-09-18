@@ -7,54 +7,48 @@ use crate::{
     ApiResponse, DirectExecutor,
 };
 
-pub struct ApiProvider<'a, C, E, I = i32>
+pub struct ApiProvider<'a, C, E>
 where
     C: ApiClient,
     E: RequestExecutor<C>,
-    I: num_traits::AsPrimitive<i64>,
 {
     client: &'a C,
     executor: E,
-    _marker: std::marker::PhantomData<I>,
 }
 
-impl<'a, C, E, I> ApiProvider<'a, C, E, I>
+impl<'a, C, E> ApiProvider<'a, C, E>
 where
     C: ApiClient,
     E: RequestExecutor<C>,
-    I: num_traits::AsPrimitive<i64> + std::hash::Hash + std::cmp::Eq,
-    i64: num_traits::AsPrimitive<I>,
 {
-    pub fn new(client: &'a C, executor: E) -> ApiProvider<'a, C, E, I> {
-        Self {
-            client,
-            executor,
-            _marker: Default::default(),
-        }
+    pub fn new(client: &'a C, executor: E) -> ApiProvider<'a, C, E> {
+        Self { client, executor }
     }
 
-    pub async fn user<F>(&self, id: Option<I>, build: F) -> Result<user::Response, E::Error>
+    pub async fn user<F>(&self, build: F) -> Result<user::Response, E::Error>
     where
         F: FnOnce(ApiRequestBuilder<user::Response>) -> ApiRequestBuilder<user::Response>,
     {
-        let mut builder = ApiRequestBuilder::new();
+        let mut builder = ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
-            .execute(self.client, builder.request, id.map(|i| i.as_()))
+            .execute(self.client, builder.request, builder.id)
             .await
     }
 
-    pub async fn users<F, L>(
+    pub async fn users<F, L, I>(
         &self,
         ids: L,
         build: F,
     ) -> HashMap<I, Result<user::Response, E::Error>>
     where
         F: FnOnce(ApiRequestBuilder<user::Response>) -> ApiRequestBuilder<user::Response>,
+        I: num_traits::AsPrimitive<i64> + std::hash::Hash + std::cmp::Eq,
+        i64: num_traits::AsPrimitive<I>,
         L: IntoIterator<Item = I>,
     {
-        let mut builder = ApiRequestBuilder::new();
+        let mut builder = ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
@@ -69,28 +63,30 @@ where
             .collect()
     }
 
-    pub async fn faction<F>(&self, id: Option<I>, build: F) -> Result<faction::Response, E::Error>
+    pub async fn faction<F>(&self, build: F) -> Result<faction::Response, E::Error>
     where
         F: FnOnce(ApiRequestBuilder<faction::Response>) -> ApiRequestBuilder<faction::Response>,
     {
-        let mut builder = ApiRequestBuilder::new();
+        let mut builder = ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
-            .execute(self.client, builder.request, id.map(|i| i.as_()))
+            .execute(self.client, builder.request, builder.id)
             .await
     }
 
-    pub async fn factions<F, L>(
+    pub async fn factions<F, L, I>(
         &self,
         ids: L,
         build: F,
     ) -> HashMap<I, Result<faction::Response, E::Error>>
     where
         F: FnOnce(ApiRequestBuilder<faction::Response>) -> ApiRequestBuilder<faction::Response>,
+        I: num_traits::AsPrimitive<i64> + std::hash::Hash + std::cmp::Eq,
+        i64: num_traits::AsPrimitive<I>,
         L: IntoIterator<Item = I>,
     {
-        let mut builder = ApiRequestBuilder::new();
+        let mut builder = ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
@@ -105,28 +101,30 @@ where
             .collect()
     }
 
-    pub async fn torn<F>(&self, id: Option<I>, build: F) -> Result<torn::Response, E::Error>
+    pub async fn torn<F>(&self, build: F) -> Result<torn::Response, E::Error>
     where
         F: FnOnce(ApiRequestBuilder<torn::Response>) -> ApiRequestBuilder<torn::Response>,
     {
-        let mut builder = ApiRequestBuilder::new();
+        let mut builder = ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
-            .execute(self.client, builder.request, id.map(|i| i.as_()))
+            .execute(self.client, builder.request, builder.id)
             .await
     }
 
-    pub async fn torns<F, L>(
+    pub async fn torns<F, L, I>(
         &self,
         ids: L,
         build: F,
     ) -> HashMap<I, Result<torn::Response, E::Error>>
     where
         F: FnOnce(ApiRequestBuilder<torn::Response>) -> ApiRequestBuilder<torn::Response>,
+        I: num_traits::AsPrimitive<i64> + std::hash::Hash + std::cmp::Eq,
+        i64: num_traits::AsPrimitive<I>,
         L: IntoIterator<Item = I>,
     {
-        let mut builder = ApiRequestBuilder::new();
+        let mut builder = ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
