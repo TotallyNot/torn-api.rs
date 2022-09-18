@@ -1,6 +1,6 @@
 [package]
 name = "torn-api-macros"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Pyrit [2111649]"]
 license = "MIT"
@@ -12,6 +12,7 @@ description = "Macros implementation of #[derive(ApiCategory)]"
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0", features = [ "extra-traits" ] }
-quote = "1.0"
+syn = { version = "1", features = [ "extra-traits" ] }
+proc-macro2 = "1"
+quote = "1"
 convert_case = "0.5"

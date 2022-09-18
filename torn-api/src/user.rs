@@ -195,7 +195,7 @@ pub enum EliminationTeam {
     DirtyCops,
     LaughingStock,
     JeanTherapy,
-    #[serde(rename = "statants-soldiers")]
+    #[serde(rename = "satants-soldiers")]
     SatansSoldiers,
     WolfPack,
     Sleepyheads,
@@ -399,7 +399,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(|b| {
+            .user(None, |b| {
                 b.selections(&[
                     Selection::Basic,
                     Selection::Discord,
@@ -424,7 +424,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(|b| b.id(28).selections(&[Selection::Profile]))
+            .user(Some(28), |b| b.selections(&[Selection::Profile]))
             .await
             .unwrap();
 
@@ -439,11 +439,24 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(|b| b.selections(&[Selection::Profile]))
+            .user(None, |b| b.selections(&[Selection::Profile]))
             .await
             .unwrap();
 
         let profile = response.profile().unwrap();
         assert!(profile.competition.is_some());
+    }
+
+    #[async_test]
+    async fn bulk() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .users([1, 2111649], |b| b.selections(&[Selection::Basic]))
+            .await;
+
+        response.get(&1).as_ref().unwrap().as_ref().unwrap();
+        response.get(&2111649).as_ref().unwrap().as_ref().unwrap();
     }
 }

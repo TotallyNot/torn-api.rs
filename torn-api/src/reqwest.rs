@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 
-use crate::ThreadSafeApiClient;
+use crate::send::ApiClient;
 
 #[async_trait]
-impl ThreadSafeApiClient for reqwest::Client {
+impl ApiClient for reqwest::Client {
     type Error = reqwest::Error;
 
     async fn request(&self, url: String) -> Result<serde_json::Value, Self::Error> {

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
-use crate::ApiClient;
+use crate::local::ApiClient;
 
 #[derive(Error, Debug)]
 pub enum AwcApiClientError {
