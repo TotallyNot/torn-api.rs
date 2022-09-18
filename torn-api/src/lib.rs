@@ -1,19 +1,22 @@
 #![warn(clippy::all, clippy::perf, clippy::style, clippy::suspicious)]
 
 pub mod faction;
+pub mod local;
+pub mod send;
+pub mod torn;
 pub mod user;
 
 #[cfg(feature = "awc")]
-pub mod awc;
+mod awc;
 
 #[cfg(feature = "reqwest")]
-pub mod reqwest;
+mod reqwest;
 
 mod de_util;
 
-use async_trait::async_trait;
+use std::fmt::Write;
+
 use chrono::{DateTime, Utc};
-use num_traits::{AsPrimitive, PrimInt};
 use serde::de::{DeserializeOwned, Error as DeError};
 use thiserror::Error;
 
@@ -54,20 +57,27 @@ impl ApiResponse {
     where
         D: DeserializeOwned,
     {
-        serde_json::from_value(self.value.clone())
+        D::deserialize(&self.value)
     }
 
     fn decode_field<D>(&self, field: &'static str) -> serde_json::Result<D>
     where
         D: DeserializeOwned,
     {
-        let value = self
-            .value
+        self.value
             .get(field)
-            .ok_or_else(|| serde_json::Error::missing_field(field))?
-            .clone();
+            .ok_or_else(|| serde_json::Error::missing_field(field))
+            .and_then(D::deserialize)
+    }
 
-        serde_json::from_value(value)
+    fn decode_field_with<'de, V, F>(&'de self, field: &'static str, fun: F) -> serde_json::Result<V>
+    where
+        F: FnOnce(&'de serde_json::Value) -> serde_json::Result<V>,
+    {
+        self.value
+            .get(field)
+            .ok_or_else(|| serde_json::Error::missing_field(field))
+            .and_then(fun)
     }
 }
 
@@ -83,138 +93,6 @@ pub trait ApiCategoryResponse: Send + Sync {
     fn from_response(response: ApiResponse) -> Self;
 }
 
-#[async_trait]
-pub trait ThreadSafeApiClient: Send + Sync {
-    type Error: std::error::Error + Sync + Send;
-
-    async fn request(&self, url: String) -> Result<serde_json::Value, Self::Error>;
-
-    fn torn_api<S>(&self, key: S) -> ThreadSafeApiProvider<Self, DirectExecutor<Self>>
-    where
-        Self: Sized,
-        S: ToString,
-    {
-        ThreadSafeApiProvider::new(self, DirectExecutor::new(key.to_string()))
-    }
-}
-
-#[async_trait(?Send)]
-pub trait ApiClient {
-    type Error: std::error::Error;
-
-    async fn request(&self, url: String) -> Result<serde_json::Value, Self::Error>;
-
-    fn torn_api<S>(&self, key: S) -> ApiProvider<Self, DirectExecutor<Self>>
-    where
-        Self: Sized,
-        S: ToString,
-    {
-        ApiProvider::new(self, DirectExecutor::new(key.to_string()))
-    }
-}
-
-#[async_trait(?Send)]
-pub trait RequestExecutor<C>
-where
-    C: ApiClient,
-{
-    type Error: std::error::Error;
-
-    async fn execute<A>(&self, client: &C, request: ApiRequest<A>) -> Result<A, Self::Error>
-    where
-        A: ApiCategoryResponse;
-}
-
-#[async_trait]
-pub trait ThreadSafeRequestExecutor<C>
-where
-    C: ThreadSafeApiClient,
-{
-    type Error: std::error::Error + Send + Sync;
-
-    async fn execute<A>(&self, client: &C, request: ApiRequest<A>) -> Result<A, Self::Error>
-    where
-        A: ApiCategoryResponse;
-}
-
-pub struct ApiProvider<'a, C, E>
-where
-    C: ApiClient,
-    E: RequestExecutor<C>,
-{
-    client: &'a C,
-    executor: E,
-}
-
-impl<'a, C, E> ApiProvider<'a, C, E>
-where
-    C: ApiClient,
-    E: RequestExecutor<C>,
-{
-    pub fn new(client: &'a C, executor: E) -> ApiProvider<'a, C, E> {
-        Self { client, executor }
-    }
-
-    pub async fn user<F>(&self, build: F) -> Result<user::Response, E::Error>
-    where
-        F: FnOnce(ApiRequestBuilder<user::Response>) -> ApiRequestBuilder<user::Response>,
-    {
-        let mut builder = ApiRequestBuilder::<user::Response>::new();
-        builder = build(builder);
-
-        self.executor.execute(self.client, builder.request).await
-    }
-
-    pub async fn faction<F>(&self, build: F) -> Result<faction::Response, E::Error>
-    where
-        F: FnOnce(ApiRequestBuilder<faction::Response>) -> ApiRequestBuilder<faction::Response>,
-    {
-        let mut builder = ApiRequestBuilder::<faction::Response>::new();
-        builder = build(builder);
-
-        self.executor.execute(self.client, builder.request).await
-    }
-}
-
-pub struct ThreadSafeApiProvider<'a, C, E>
-where
-    C: ThreadSafeApiClient,
-    E: ThreadSafeRequestExecutor<C>,
-{
-    client: &'a C,
-    executor: E,
-}
-
-impl<'a, C, E> ThreadSafeApiProvider<'a, C, E>
-where
-    C: ThreadSafeApiClient,
-    E: ThreadSafeRequestExecutor<C>,
-{
-    pub fn new(client: &'a C, executor: E) -> ThreadSafeApiProvider<'a, C, E> {
-        Self { client, executor }
-    }
-
-    pub async fn user<F>(&self, build: F) -> Result<user::Response, E::Error>
-    where
-        F: FnOnce(ApiRequestBuilder<user::Response>) -> ApiRequestBuilder<user::Response>,
-    {
-        let mut builder = ApiRequestBuilder::<user::Response>::new();
-        builder = build(builder);
-
-        self.executor.execute(self.client, builder.request).await
-    }
-
-    pub async fn faction<F>(&self, build: F) -> Result<faction::Response, E::Error>
-    where
-        F: FnOnce(ApiRequestBuilder<faction::Response>) -> ApiRequestBuilder<faction::Response>,
-    {
-        let mut builder = ApiRequestBuilder::<faction::Response>::new();
-        builder = build(builder);
-
-        self.executor.execute(self.client, builder.request).await
-    }
-}
-
 pub struct DirectExecutor<C> {
     key: String,
     _marker: std::marker::PhantomData<C>,
@@ -224,7 +102,7 @@ impl<C> DirectExecutor<C> {
     fn new(key: String) -> Self {
         Self {
             key,
-            _marker: std::marker::PhantomData,
+            _marker: Default::default(),
         }
     }
 }
@@ -241,51 +119,12 @@ where
     Response(#[from] ResponseError),
 }
 
-#[async_trait(?Send)]
-impl<C> RequestExecutor<C> for DirectExecutor<C>
-where
-    C: ApiClient,
-{
-    type Error = ApiClientError<C::Error>;
-
-    async fn execute<A>(&self, client: &C, request: ApiRequest<A>) -> Result<A, Self::Error>
-    where
-        A: ApiCategoryResponse,
-    {
-        let url = request.url(&self.key);
-
-        let value = client.request(url).await.map_err(ApiClientError::Client)?;
-
-        Ok(A::from_response(ApiResponse::from_value(value)?))
-    }
-}
-
-#[async_trait]
-impl<C> ThreadSafeRequestExecutor<C> for DirectExecutor<C>
-where
-    C: ThreadSafeApiClient,
-{
-    type Error = ApiClientError<C::Error>;
-
-    async fn execute<A>(&self, client: &C, request: ApiRequest<A>) -> Result<A, Self::Error>
-    where
-        A: ApiCategoryResponse,
-    {
-        let url = request.url(&self.key);
-
-        let value = client.request(url).await.map_err(ApiClientError::Client)?;
-
-        Ok(A::from_response(ApiResponse::from_value(value)?))
-    }
-}
-
 #[derive(Debug)]
 pub struct ApiRequest<A>
 where
     A: ApiCategoryResponse,
 {
     selections: Vec<&'static str>,
-    id: Option<u64>,
     from: Option<DateTime<Utc>>,
     to: Option<DateTime<Utc>>,
     comment: Option<String>,
@@ -299,7 +138,6 @@ where
     fn default() -> Self {
         Self {
             selections: Vec::default(),
-            id: None,
             from: None,
             to: None,
             comment: None,
@@ -312,37 +150,28 @@ impl<A> ApiRequest<A>
 where
     A: ApiCategoryResponse,
 {
-    pub fn url(&self, key: &str) -> String {
-        let mut query_fragments = vec![
-            format!("selections={}", self.selections.join(",")),
-            format!("key={}", key),
-        ];
+    pub fn url(&self, key: &str, id: Option<i64>) -> String {
+        let mut url = format!("https://api.torn.com/{}/", A::Selection::category());
+
+        if let Some(id) = id {
+            write!(url, "{}", id).unwrap();
+        }
+
+        write!(url, "?selections={}&key={}", self.selections.join(","), key).unwrap();
 
         if let Some(from) = self.from {
-            query_fragments.push(format!("from={}", from.timestamp()));
+            write!(url, "&from={}", from.timestamp()).unwrap();
         }
 
         if let Some(to) = self.to {
-            query_fragments.push(format!("to={}", to.timestamp()));
+            write!(url, "&to={}", to.timestamp()).unwrap();
         }
 
         if let Some(comment) = &self.comment {
-            query_fragments.push(format!("comment={}", comment));
+            write!(url, "&comment={}", comment).unwrap();
         }
 
-        let query = query_fragments.join("&");
-
-        let id_fragment = match self.id {
-            Some(id) => id.to_string(),
-            None => "".to_owned(),
-        };
-
-        format!(
-            "https://api.torn.com/{}/{}?{}",
-            A::Selection::category(),
-            id_fragment,
-            query
-        )
+        url
     }
 }
 
@@ -361,15 +190,6 @@ where
         Self {
             request: ApiRequest::default(),
         }
-    }
-
-    #[must_use]
-    pub fn id<I>(mut self, id: I) -> Self
-    where
-        I: PrimInt + AsPrimitive<u64>,
-    {
-        self.request.id = Some(id.as_());
-        self
     }
 
     #[must_use]
@@ -399,8 +219,6 @@ where
     }
 }
 
-pub mod prelude {}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Once;
@@ -411,9 +229,9 @@ pub(crate) mod tests {
     pub use ::reqwest::Client;
 
     #[cfg(all(not(feature = "reqwest"), feature = "awc"))]
-    pub use crate::ApiClient as ClientTrait;
+    pub use crate::local::ApiClient as ClientTrait;
     #[cfg(feature = "reqwest")]
-    pub use crate::ThreadSafeApiClient as ClientTrait;
+    pub use crate::send::ApiClient as ClientTrait;
 
     #[cfg(all(not(feature = "reqwest"), feature = "awc"))]
     pub use actix_rt::test as async_test;
@@ -441,7 +259,11 @@ pub(crate) mod tests {
     async fn reqwest() {
         let key = setup();
 
-        Client::default().torn_api(key).user(|b| b).await.unwrap();
+        Client::default()
+            .torn_api(key)
+            .user(None, |b| b)
+            .await
+            .unwrap();
     }
 
     #[cfg(feature = "awc")]
@@ -449,6 +271,10 @@ pub(crate) mod tests {
     async fn awc() {
         let key = setup();
 
-        Client::default().torn_api(key).user(|b| b).await.unwrap();
+        Client::default()
+            .torn_api(key)
+            .user(None, |b| b)
+            .await
+            .unwrap();
     }
 }

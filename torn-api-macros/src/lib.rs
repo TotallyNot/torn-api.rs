@@ -17,11 +17,12 @@ enum ApiField {
 
 #[derive(Debug)]
 struct ApiAttribute {
-    type_: syn::Ident,
     field: ApiField,
     name: syn::Ident,
     raw_value: String,
     variant: syn::Ident,
+    type_name: proc_macro2::TokenStream,
+    with: Option<syn::Ident>,
 }
 
 fn get_lit_string(lit: syn::Lit) -> String {
@@ -71,6 +72,7 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
                         Ok(syn::Meta::List(l)) => {
                             let mut type_: Option<String> = None;
                             let mut field: Option<ApiField> = None;
+                            let mut with: Option<String> = None;
                             for nested in l.nested.into_iter() {
                                 match nested {
                                     syn::NestedMeta::Meta(syn::Meta::NameValue(m))
@@ -80,6 +82,15 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
                                             type_ = Some(get_lit_string(m.lit));
                                         } else {
                                             panic!("type can only be specified once");
+                                        }
+                                    }
+                                    syn::NestedMeta::Meta(syn::Meta::NameValue(m))
+                                        if m.path.is_ident("with") =>
+                                    {
+                                        if with.is_none() {
+                                            with = Some(get_lit_string(m.lit));
+                                        } else {
+                                            panic!("with can only be specified once");
                                         }
                                     }
                                     syn::NestedMeta::Meta(syn::Meta::NameValue(m))
@@ -109,12 +120,17 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
                             let name =
                                 format_ident!("{}", variant.ident.to_string().to_case(Case::Snake));
                             let raw_value = variant.ident.to_string().to_lowercase();
+
                             return Some(ApiAttribute {
-                                type_: quote::format_ident!("{}", type_.expect("type")),
                                 field: field.expect("one of field/flatten"),
                                 name,
                                 raw_value,
                                 variant: variant.ident.clone(),
+                                type_name: type_
+                                    .expect("Need to specify type name")
+                                    .parse()
+                                    .expect("failed to parse type name"),
+                                with: with.map(|w| format_ident!("{}", w)),
                             });
                         }
                         _ => panic!("Couldn't parse api attribute"),
@@ -127,21 +143,34 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
 
     let accessors = fields.iter().map(
         |ApiAttribute {
-             type_, field, name, ..
-         }| match field {
-            ApiField::Property(prop) => {
+             field,
+             name,
+             type_name,
+             with,
+             ..
+         }| match (field, with) {
+            (ApiField::Property(prop), None) => {
                 let prop_str = prop.to_string();
                 quote! {
-                    pub fn #name(&self) -> serde_json::Result<#type_> {
+                    pub fn #name(&self) -> serde_json::Result<#type_name> {
                         self.0.decode_field(#prop_str)
                     }
                 }
             }
-            ApiField::Flattened => quote! {
-                pub fn #name(&self) -> serde_json::Result<#type_> {
+            (ApiField::Property(prop), Some(f)) => {
+                let prop_str = prop.to_string();
+                quote! {
+                    pub fn #name(&self) -> serde_json::Result<#type_name> {
+                        self.0.decode_field_with(#prop_str, #f)
+                    }
+                }
+            }
+            (ApiField::Flattened, None) => quote! {
+                pub fn #name(&self) -> serde_json::Result<#type_name> {
                     self.0.decode()
                 }
             },
+            (ApiField::Flattened, Some(_)) => todo!(),
         },
     );
 

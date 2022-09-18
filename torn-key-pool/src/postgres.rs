@@ -4,7 +4,7 @@ use indoc::indoc;
 use sqlx::{FromRow, PgPool};
 use thiserror::Error;
 
-use crate::{ApiKey, KeyDomain, KeyPool, KeyPoolStorage};
+use crate::{ApiKey, KeyDomain, KeyPoolStorage};
 
 #[derive(Debug, Error)]
 pub enum PgStorageError {
@@ -102,18 +102,12 @@ impl KeyPoolStorage for PgKeyPoolStorage {
                     with key as (
                         select 
                             id,
-                            user_id,
-                            faction_id,
-                            key,
                             case
                                 when extract(minute from last_used)=extract(minute from now()) then uses
                                 else 0::smallint
-                            end as uses,
-                            user,
-                            faction,
-                            last_used
+                            end as uses
                         from api_keys {}
-                        order by last_used asc limit 1 FOR UPDATE
+                        order by last_used asc limit 1
                     )
                     update api_keys set
                         uses = key.uses + 1,
@@ -162,6 +156,70 @@ impl KeyPoolStorage for PgKeyPoolStorage {
         }
     }
 
+    async fn acquire_many_keys(
+        &self,
+        domain: KeyDomain,
+        number: i64,
+    ) -> Result<Vec<Self::Key>, Self::Error> {
+        let predicate = match domain {
+            KeyDomain::Public => "".to_owned(),
+            KeyDomain::User(id) => format!("where and user_id={} and user", id),
+            KeyDomain::Faction(id) => format!("where and faction_id={} and faction", id),
+        };
+
+        let mut tx = self.pool.begin().await?;
+
+        let mut keys: Vec<PgKey> = sqlx::query_as(&indoc::formatdoc!(
+            r#"
+            select
+                id,
+                user_id,
+                faction_id,
+                key,
+                case
+                    when extract(minute from last_used)=extract(minute from now()) then uses
+                    else 0::smallint
+                end as uses,
+                "user",
+                faction,
+                last_used
+            from api_keys {} order by last_used limit $1 for update
+        "#,
+            predicate
+        ))
+        .bind(number)
+        .fetch_all(&mut tx)
+        .await?;
+
+        let mut result = Vec::with_capacity(number as usize);
+        'outer: for _ in 0..(((number as usize) / keys.len()) + 1) {
+            for key in &mut keys {
+                if key.uses == self.limit || result.len() == (number as usize) {
+                    break 'outer;
+                } else {
+                    key.uses += 1;
+                    result.push(key.clone());
+                }
+            }
+        }
+
+        sqlx::query(indoc! {r#"
+            update api_keys set
+                uses = tmp.uses,
+                last_used = now()
+            from (select unnest($1::int4[]) as id, unnest($2::int2[]) as uses) as tmp
+            where api_keys.id = tmp.id
+        "#})
+        .bind(keys.iter().map(|k| k.id).collect::<Vec<_>>())
+        .bind(keys.iter().map(|k| k.uses).collect::<Vec<_>>())
+        .execute(&mut tx)
+        .await?;
+
+        tx.commit().await?;
+
+        Ok(result)
+    }
+
     async fn flag_key(&self, key: Self::Key, code: u8) -> Result<bool, Self::Error> {
         // TODO: put keys in cooldown when appropriate
         match code {
@@ -174,27 +232,6 @@ impl KeyPoolStorage for PgKeyPoolStorage {
             }
             _ => Ok(false),
         }
-    }
-}
-
-pub type PgKeyPool<A> = KeyPool<A, PgKeyPoolStorage>;
-
-impl<A> PgKeyPool<A>
-where
-    A: torn_api::ApiClient,
-{
-    pub async fn connect(
-        client: A,
-        database_url: &str,
-        limit: i16,
-    ) -> Result<Self, PgStorageError> {
-        let db_pool = PgPool::connect(database_url).await?;
-        let storage = PgKeyPoolStorage::new(db_pool, limit);
-        storage.initialise().await?;
-
-        let key_pool = Self::new(client, storage);
-
-        Ok(key_pool)
     }
 }
 
@@ -253,13 +290,12 @@ mod test {
             .unwrap()
             .get("uses");
 
-        let futures = (0..30).into_iter().map(|_| {
-            let storage = storage.clone();
-            async move {
-                storage.acquire_key(KeyDomain::Public).await.unwrap();
-            }
-        });
-        futures::future::join_all(futures).await;
+        let keys = storage
+            .acquire_many_keys(KeyDomain::Public, 30)
+            .await
+            .unwrap();
+
+        assert_eq!(keys.len(), 30);
 
         let after: i16 = sqlx::query("select uses from api_keys")
             .fetch_one(&storage.pool)
