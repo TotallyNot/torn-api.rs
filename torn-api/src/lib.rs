@@ -7,10 +7,10 @@ pub mod torn;
 pub mod user;
 
 #[cfg(feature = "awc")]
-mod awc;
+pub mod awc;
 
 #[cfg(feature = "reqwest")]
-mod reqwest;
+pub mod reqwest;
 
 mod de_util;
 
