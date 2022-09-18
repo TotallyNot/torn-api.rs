@@ -78,3 +78,45 @@ where
         }
     }
 }
+
+#[cfg(all(test, feature = "postgres"))]
+mod test {
+    use std::sync::{Arc, Once};
+
+    use sqlx::Row;
+    use tokio::test;
+
+    use super::*;
+
+    static INIT: Once = Once::new();
+
+    pub(crate) async fn setup() -> postgres::PgKeyPoolStorage {
+        INIT.call_once(|| {
+            dotenv::dotenv().ok();
+        });
+
+        let pool = sqlx::PgPool::connect(&std::env::var("DATABASE_URL").unwrap())
+            .await
+            .unwrap();
+
+        sqlx::query("update api_keys set uses=0")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        postgres::PgKeyPoolStorage::new(pool, 50)
+    }
+
+    #[test]
+    async fn key_pool_bulk() {
+        let storage = setup().await;
+
+        if let Err(e) = storage.initialise().await {
+            panic!("Initialising key storage failed: {:?}", e);
+        }
+
+        let pool = send::KeyPool::new(reqwest::Client::default(), storage);
+
+        pool.torn_api(KeyDomain::Public).users([1], |b| b).await;
+    }
+}

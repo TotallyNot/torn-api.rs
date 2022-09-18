@@ -340,6 +340,9 @@ pub struct Profile {
 
     #[serde(deserialize_with = "deserialize_comp")]
     pub competition: Option<Competition>,
+
+    #[serde(deserialize_with = "de_util::int_is_bool")]
+    pub revivable: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]

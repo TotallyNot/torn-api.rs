@@ -39,3 +39,16 @@ where
         Ok(Some(DateTime::from_utc(naive, Utc)))
     }
 }
+
+pub fn int_is_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let i = i64::deserialize(deserializer)?;
+
+    match i {
+        0 => Ok(false),
+        1 => Ok(true),
+        x => Err(Error::invalid_value(Unexpected::Signed(x), &"0 or 1")),
+    }
+}
