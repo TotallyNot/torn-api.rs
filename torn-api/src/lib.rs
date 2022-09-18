@@ -180,18 +180,25 @@ where
     A: ApiCategoryResponse,
 {
     request: ApiRequest<A>,
+    id: Option<i64>,
+}
+
+impl<A> Default for ApiRequestBuilder<A>
+where
+    A: ApiCategoryResponse,
+{
+    fn default() -> Self {
+        Self {
+            request: Default::default(),
+            id: None,
+        }
+    }
 }
 
 impl<A> ApiRequestBuilder<A>
 where
     A: ApiCategoryResponse,
 {
-    pub(crate) fn new() -> Self {
-        Self {
-            request: ApiRequest::default(),
-        }
-    }
-
     #[must_use]
     pub fn selections(mut self, selections: &[A::Selection]) -> Self {
         self.request
@@ -215,6 +222,15 @@ where
     #[must_use]
     pub fn comment(mut self, comment: String) -> Self {
         self.request.comment = Some(comment);
+        self
+    }
+
+    #[must_use]
+    pub fn id<I>(mut self, id: I) -> Self
+    where
+        I: num_traits::AsPrimitive<i64>,
+    {
+        self.id = Some(id.as_());
         self
     }
 }
@@ -259,11 +275,7 @@ pub(crate) mod tests {
     async fn reqwest() {
         let key = setup();
 
-        Client::default()
-            .torn_api(key)
-            .user(None, |b| b)
-            .await
-            .unwrap();
+        Client::default().torn_api(key).user(|b| b).await.unwrap();
     }
 
     #[cfg(feature = "awc")]

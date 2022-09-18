@@ -47,7 +47,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .faction(None, |b| b.selections(&[Selection::Basic]))
+            .faction(|b| b.selections(&[Selection::Basic]))
             .await
             .unwrap();
 
