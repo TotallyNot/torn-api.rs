@@ -81,9 +81,8 @@ where
 
 #[cfg(all(test, feature = "postgres"))]
 mod test {
-    use std::sync::{Arc, Once};
+    use std::sync::Once;
 
-    use sqlx::Row;
     use tokio::test;
 
     use super::*;
