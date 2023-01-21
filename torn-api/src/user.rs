@@ -1,4 +1,3 @@
-use chrono::{serde::ts_seconds, DateTime, Utc};
 use serde::{
     de::{self, MapAccess, Visitor},
     Deserialize, Deserializer,
@@ -6,7 +5,9 @@ use serde::{
 
 use torn_api_macros::ApiCategory;
 
-use super::de_util;
+use crate::de_util;
+
+pub use crate::common::{LastAction, Status};
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "user")]
@@ -30,22 +31,16 @@ pub enum Gender {
     Enby,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct LastAction {
-    #[serde(with = "ts_seconds")]
-    pub timestamp: DateTime<Utc>,
-}
-
 #[derive(Debug, Clone)]
-pub struct Faction {
+pub struct Faction<'a> {
     pub faction_id: i32,
-    pub faction_name: String,
+    pub faction_name: &'a str,
     pub days_in_faction: i16,
-    pub position: String,
-    pub faction_tag: Option<String>,
+    pub position: &'a str,
+    pub faction_tag: Option<&'a str>,
 }
 
-fn deserialize_faction<'de, D>(deserializer: D) -> Result<Option<Faction>, D::Error>
+fn deserialize_faction<'de, D>(deserializer: D) -> Result<Option<Faction<'de>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -62,7 +57,7 @@ where
     struct FactionVisitor;
 
     impl<'de> Visitor<'de> for FactionVisitor {
-        type Value = Option<Faction>;
+        type Value = Option<Faction<'de>>;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
             formatter.write_str("struct Faction")
@@ -128,44 +123,13 @@ where
     deserializer.deserialize_struct("Faction", FIELDS, FactionVisitor)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-pub enum State {
-    Okay,
-    Traveling,
-    Hospital,
-    Abroad,
-    Jail,
-    Federal,
-    Fallen,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum StateColour {
-    Green,
-    Red,
-    Blue,
-}
-
 #[derive(Debug, Clone, Deserialize)]
-pub struct Status {
-    pub description: String,
-    #[serde(deserialize_with = "de_util::empty_string_is_none")]
-    pub details: Option<String>,
-    #[serde(rename = "color")]
-    pub colour: StateColour,
-    pub state: State,
-    #[serde(deserialize_with = "de_util::zero_date_is_none")]
-    pub until: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Basic {
+pub struct Basic<'a> {
     pub player_id: i32,
-    pub name: String,
+    pub name: &'a str,
     pub level: i16,
     pub gender: Gender,
-    pub status: Status,
+    pub status: Status<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -238,6 +202,20 @@ where
             formatter.write_str("struct Competition")
         }
 
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_map(self)
+        }
+
         fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
         where
             V: MapAccess<'de>,
@@ -259,11 +237,11 @@ where
                         attacks = Some(map.next_value()?);
                     }
                     Field::Team => {
-                        let team_raw: String = map.next_value()?;
+                        let team_raw: &str = map.next_value()?;
                         team = if team_raw.is_empty() {
                             None
                         } else {
-                            Some(match team_raw.as_str() {
+                            Some(match team_raw {
                                 "firestarters" => EliminationTeam::Firestarters,
                                 "hard-boiled" => EliminationTeam::HardBoiled,
                                 "quack-addicts" => EliminationTeam::QuackAddicts,
@@ -277,7 +255,7 @@ where
                                 "wolf-pack" => EliminationTeam::WolfPack,
                                 "sleepyheads" => EliminationTeam::Sleepyheads,
                                 _ => Err(de::Error::unknown_variant(
-                                    &team_raw,
+                                    team_raw,
                                     &[
                                         "firestarters",
                                         "hard-boiled",
@@ -320,14 +298,14 @@ where
         }
     }
 
-    deserializer.deserialize_map(CompetitionVisitor)
+    deserializer.deserialize_option(CompetitionVisitor)
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Profile {
+pub struct Profile<'a> {
     pub player_id: i32,
-    pub name: String,
-    pub rank: String,
+    pub name: &'a str,
+    pub rank: &'a str,
     pub level: i16,
     pub gender: Gender,
     pub age: i32,
@@ -335,8 +313,8 @@ pub struct Profile {
     pub life: LifeBar,
     pub last_action: LastAction,
     #[serde(deserialize_with = "deserialize_faction")]
-    pub faction: Option<Faction>,
-    pub status: Status,
+    pub faction: Option<Faction<'a>>,
+    pub status: Status<'a>,
 
     #[serde(deserialize_with = "deserialize_comp")]
     pub competition: Option<Competition>,
@@ -437,20 +415,6 @@ mod tests {
     }
 
     #[async_test]
-    async fn team_visible() {
-        let key = setup();
-
-        let response = Client::default()
-            .torn_api(key)
-            .user(|b| b.selections(&[Selection::Profile]))
-            .await
-            .unwrap();
-
-        let profile = response.profile().unwrap();
-        assert!(profile.competition.is_some());
-    }
-
-    #[async_test]
     async fn bulk() {
         let key = setup();
 
@@ -469,14 +433,12 @@ mod tests {
     async fn discord() {
         let key = setup();
 
-        let basic = Client::default()
+        let response = Client::default()
             .torn_api(key)
             .user(|b| b.id(374272176892674048i64).selections(&[Selection::Basic]))
             .await
-            .unwrap()
-            .basic()
             .unwrap();
 
-        assert_eq!(basic.player_id, 2111649);
+        assert_eq!(response.basic().unwrap().player_id, 2111649);
     }
 }

@@ -1,11 +1,13 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
-use serde::de::{Deserialize, Deserializer, Error, Unexpected};
+#![allow(unused)]
 
-pub fn empty_string_is_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+use chrono::{DateTime, NaiveDateTime, Utc};
+use serde::de::{Deserialize, Deserializer, Error, Unexpected, Visitor};
+
+pub(crate) fn empty_string_is_none<'de, D>(deserializer: D) -> Result<Option<&'de str>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let s = String::deserialize(deserializer)?;
+    let s: &str = Deserialize::deserialize(deserializer)?;
     if s.is_empty() {
         Ok(None)
     } else {
@@ -13,7 +15,7 @@ where
     }
 }
 
-pub fn string_is_long<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+pub(crate) fn string_is_long<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -27,7 +29,7 @@ where
     }
 }
 
-pub fn zero_date_is_none<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+pub(crate) fn zero_date_is_none<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -40,7 +42,7 @@ where
     }
 }
 
-pub fn int_is_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+pub(crate) fn int_is_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -51,4 +53,40 @@ where
         1 => Ok(true),
         x => Err(Error::invalid_value(Unexpected::Signed(x), &"0 or 1")),
     }
+}
+
+pub(crate) fn empty_string_int_option<'de, D>(deserializer: D) -> Result<Option<i32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct DumbVisitor;
+
+    impl<'de> Visitor<'de> for DumbVisitor {
+        type Value = Option<i32>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "Empty string or integer")
+        }
+
+        // serde_json will treat all unsigned integers as u64
+        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: Error,
+        {
+            Ok(Some(v as i32))
+        }
+
+        fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+        where
+            E: Error,
+        {
+            if v.is_empty() {
+                Ok(None)
+            } else {
+                Err(E::invalid_value(Unexpected::Str(v), &self))
+            }
+        }
+    }
+
+    deserializer.deserialize_any(DumbVisitor)
 }
