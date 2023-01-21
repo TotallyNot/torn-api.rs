@@ -2,17 +2,16 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 
-use crate::{
-    faction, torn, user, ApiCategoryResponse, ApiClientError, ApiRequest, ApiRequestBuilder,
-    ApiResponse, DirectExecutor,
-};
+use crate::{ApiCategoryResponse, ApiClientError, ApiRequest, ApiResponse, DirectExecutor};
 
 pub struct ApiProvider<'a, C, E>
 where
     C: ApiClient,
     E: RequestExecutor<C>,
 {
+    #[allow(dead_code)]
     client: &'a C,
+    #[allow(dead_code)]
     executor: E,
 }
 
@@ -25,11 +24,14 @@ where
         Self { client, executor }
     }
 
-    pub async fn user<F>(&self, build: F) -> Result<user::Response, E::Error>
+    #[cfg(feature = "user")]
+    pub async fn user<F>(&self, build: F) -> Result<crate::user::Response, E::Error>
     where
-        F: FnOnce(ApiRequestBuilder<user::Response>) -> ApiRequestBuilder<user::Response>,
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::user::Response>,
+        ) -> crate::ApiRequestBuilder<crate::user::Response>,
     {
-        let mut builder = ApiRequestBuilder::default();
+        let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
@@ -37,18 +39,21 @@ where
             .await
     }
 
+    #[cfg(feature = "user")]
     pub async fn users<F, L, I>(
         &self,
         ids: L,
         build: F,
-    ) -> HashMap<I, Result<user::Response, E::Error>>
+    ) -> HashMap<I, Result<crate::user::Response, E::Error>>
     where
-        F: FnOnce(ApiRequestBuilder<user::Response>) -> ApiRequestBuilder<user::Response>,
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::user::Response>,
+        ) -> crate::ApiRequestBuilder<crate::user::Response>,
         I: num_traits::AsPrimitive<i64> + std::hash::Hash + std::cmp::Eq,
         i64: num_traits::AsPrimitive<I>,
         L: IntoIterator<Item = I>,
     {
-        let mut builder = ApiRequestBuilder::default();
+        let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
@@ -63,11 +68,14 @@ where
             .collect()
     }
 
-    pub async fn faction<F>(&self, build: F) -> Result<faction::Response, E::Error>
+    #[cfg(feature = "faction")]
+    pub async fn faction<F>(&self, build: F) -> Result<crate::faction::Response, E::Error>
     where
-        F: FnOnce(ApiRequestBuilder<faction::Response>) -> ApiRequestBuilder<faction::Response>,
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::faction::Response>,
+        ) -> crate::ApiRequestBuilder<crate::faction::Response>,
     {
-        let mut builder = ApiRequestBuilder::default();
+        let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
@@ -75,18 +83,21 @@ where
             .await
     }
 
+    #[cfg(feature = "faction")]
     pub async fn factions<F, L, I>(
         &self,
         ids: L,
         build: F,
-    ) -> HashMap<I, Result<faction::Response, E::Error>>
+    ) -> HashMap<I, Result<crate::faction::Response, E::Error>>
     where
-        F: FnOnce(ApiRequestBuilder<faction::Response>) -> ApiRequestBuilder<faction::Response>,
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::faction::Response>,
+        ) -> crate::ApiRequestBuilder<crate::faction::Response>,
         I: num_traits::AsPrimitive<i64> + std::hash::Hash + std::cmp::Eq,
         i64: num_traits::AsPrimitive<I>,
         L: IntoIterator<Item = I>,
     {
-        let mut builder = ApiRequestBuilder::default();
+        let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
@@ -101,11 +112,14 @@ where
             .collect()
     }
 
-    pub async fn torn<F>(&self, build: F) -> Result<torn::Response, E::Error>
+    #[cfg(feature = "torn")]
+    pub async fn torn<F>(&self, build: F) -> Result<crate::torn::Response, E::Error>
     where
-        F: FnOnce(ApiRequestBuilder<torn::Response>) -> ApiRequestBuilder<torn::Response>,
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::torn::Response>,
+        ) -> crate::ApiRequestBuilder<crate::torn::Response>,
     {
-        let mut builder = ApiRequestBuilder::default();
+        let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor
@@ -113,18 +127,21 @@ where
             .await
     }
 
+    #[cfg(feature = "torn")]
     pub async fn torns<F, L, I>(
         &self,
         ids: L,
         build: F,
-    ) -> HashMap<I, Result<torn::Response, E::Error>>
+    ) -> HashMap<I, Result<crate::torn::Response, E::Error>>
     where
-        F: FnOnce(ApiRequestBuilder<torn::Response>) -> ApiRequestBuilder<torn::Response>,
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::torn::Response>,
+        ) -> crate::ApiRequestBuilder<crate::torn::Response>,
         I: num_traits::AsPrimitive<i64> + std::hash::Hash + std::cmp::Eq,
         i64: num_traits::AsPrimitive<I>,
         L: IntoIterator<Item = I>,
     {
-        let mut builder = ApiRequestBuilder::default();
+        let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
 
         self.executor

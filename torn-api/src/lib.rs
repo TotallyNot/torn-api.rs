@@ -1,10 +1,16 @@
 #![warn(clippy::all, clippy::perf, clippy::style, clippy::suspicious)]
 
-pub mod faction;
 pub mod local;
 pub mod send;
-pub mod torn;
+
+#[cfg(feature = "user")]
 pub mod user;
+
+#[cfg(feature = "faction")]
+pub mod faction;
+
+#[cfg(feature = "torn")]
+pub mod torn;
 
 #[cfg(feature = "awc")]
 pub mod awc;
@@ -12,12 +18,15 @@ pub mod awc;
 #[cfg(feature = "reqwest")]
 pub mod reqwest;
 
+#[cfg(feature = "__common")]
+mod common;
+
 mod de_util;
 
 use std::fmt::Write;
 
 use chrono::{DateTime, Utc};
-use serde::de::{DeserializeOwned, Error as DeError};
+use serde::{de::Error as DeError, Deserialize};
 use thiserror::Error;
 
 pub struct ApiResponse {
@@ -53,16 +62,18 @@ impl ApiResponse {
         }
     }
 
-    fn decode<D>(&self) -> serde_json::Result<D>
+    #[allow(dead_code)]
+    fn decode<'de, D>(&'de self) -> serde_json::Result<D>
     where
-        D: DeserializeOwned,
+        D: Deserialize<'de>,
     {
         D::deserialize(&self.value)
     }
 
-    fn decode_field<D>(&self, field: &'static str) -> serde_json::Result<D>
+    #[allow(dead_code)]
+    fn decode_field<'de, D>(&'de self, field: &'static str) -> serde_json::Result<D>
     where
-        D: DeserializeOwned,
+        D: Deserialize<'de>,
     {
         self.value
             .get(field)
@@ -70,6 +81,7 @@ impl ApiResponse {
             .and_then(D::deserialize)
     }
 
+    #[allow(dead_code)]
     fn decode_field_with<'de, V, F>(&'de self, field: &'static str, fun: F) -> serde_json::Result<V>
     where
         F: FnOnce(&'de serde_json::Value) -> serde_json::Result<V>,
@@ -236,6 +248,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(unused)]
 pub(crate) mod tests {
     use std::sync::Once;
 
@@ -265,12 +278,13 @@ pub(crate) mod tests {
         std::env::var("APIKEY").expect("api key")
     }
 
+    #[cfg(feature = "user")]
     #[test]
     fn selection_raw_value() {
         assert_eq!(user::Selection::Basic.raw_value(), "basic");
     }
 
-    #[cfg(feature = "reqwest")]
+    #[cfg(all(feature = "reqwest", feature = "user"))]
     #[tokio::test]
     async fn reqwest() {
         let key = setup();
@@ -278,15 +292,11 @@ pub(crate) mod tests {
         Client::default().torn_api(key).user(|b| b).await.unwrap();
     }
 
-    #[cfg(feature = "awc")]
+    #[cfg(all(feature = "awc", feature = "user"))]
     #[actix_rt::test]
     async fn awc() {
         let key = setup();
 
-        Client::default()
-            .torn_api(key)
-            .user(None, |b| b)
-            .await
-            .unwrap();
+        Client::default().torn_api(key).user(|b| b).await.unwrap();
     }
 }

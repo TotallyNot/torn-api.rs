@@ -46,6 +46,20 @@ where
             formatter.write_str("struct Competition")
         }
 
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            deserializer.deserialize_map(self)
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
         fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
         where
             V: MapAccess<'de>,
@@ -77,7 +91,7 @@ where
         }
     }
 
-    deserializer.deserialize_map(CompetitionVisitor)
+    deserializer.deserialize_option(CompetitionVisitor)
 }
 
 #[cfg(test)]
