@@ -136,10 +136,10 @@ pub struct ApiRequest<A>
 where
     A: ApiCategoryResponse,
 {
-    selections: Vec<&'static str>,
-    from: Option<DateTime<Utc>>,
-    to: Option<DateTime<Utc>>,
-    comment: Option<String>,
+    pub selections: Vec<&'static str>,
+    pub from: Option<DateTime<Utc>>,
+    pub to: Option<DateTime<Utc>>,
+    pub comment: Option<String>,
     phantom: std::marker::PhantomData<A>,
 }
 
