@@ -7,7 +7,7 @@ use torn_api::{
     ApiCategoryResponse, ApiRequest, ApiResponse, ResponseError,
 };
 
-use crate::{ApiKey, KeyDomain, KeyPoolError, KeyPoolExecutor, KeyPoolStorage};
+use crate::{ApiKey, KeyPoolError, KeyPoolExecutor, KeyPoolStorage};
 
 #[async_trait(?Send)]
 impl<'client, C, S> RequestExecutor<C> for KeyPoolExecutor<'client, C, S>
@@ -20,16 +20,17 @@ where
     async fn execute<A>(
         &self,
         client: &C,
-        request: ApiRequest<A>,
+        mut request: ApiRequest<A>,
         id: Option<i64>,
     ) -> Result<A, Self::Error>
     where
         A: ApiCategoryResponse,
     {
+        request.comment = self.comment.map(ToOwned::to_owned);
         loop {
             let key = self
                 .storage
-                .acquire_key(self.domain)
+                .acquire_key(self.domain.clone())
                 .await
                 .map_err(|e| KeyPoolError::Storage(Arc::new(e)))?;
             let url = request.url(key.value(), id);
@@ -56,7 +57,7 @@ where
     async fn execute_many<A>(
         &self,
         client: &C,
-        request: ApiRequest<A>,
+        mut request: ApiRequest<A>,
         ids: Vec<i64>,
     ) -> HashMap<i64, Result<A, Self::Error>>
     where
@@ -64,7 +65,7 @@ where
     {
         let keys = match self
             .storage
-            .acquire_many_keys(self.domain, ids.len() as i64)
+            .acquire_many_keys(self.domain.clone(), ids.len() as i64)
             .await
         {
             Ok(keys) => keys,
@@ -77,6 +78,7 @@ where
             }
         };
 
+        request.comment = self.comment.map(ToOwned::to_owned);
         let request_ref = &request;
 
         futures::future::join_all(std::iter::zip(ids, keys).map(|(id, mut key)| async move {
@@ -107,7 +109,7 @@ where
                     Ok(res) => return (id, Ok(A::from_response(res))),
                 };
 
-                key = match self.storage.acquire_key(self.domain).await {
+                key = match self.storage.acquire_key(self.domain.clone()).await {
                     Ok(k) => k,
                     Err(why) => return (id, Err(Self::Error::Storage(Arc::new(why)))),
                 };
@@ -127,6 +129,7 @@ where
 {
     client: C,
     storage: S,
+    comment: Option<String>,
 }
 
 impl<C, S> KeyPool<C, S>
@@ -134,12 +137,19 @@ where
     C: ApiClient,
     S: KeyPoolStorage + 'static,
 {
-    pub fn new(client: C, storage: S) -> Self {
-        Self { client, storage }
+    pub fn new(client: C, storage: S, comment: Option<String>) -> Self {
+        Self {
+            client,
+            storage,
+            comment,
+        }
     }
 
-    pub fn torn_api(&self, domain: KeyDomain) -> ApiProvider<C, KeyPoolExecutor<C, S>> {
-        ApiProvider::new(&self.client, KeyPoolExecutor::new(&self.storage, domain))
+    pub fn torn_api(&self, domain: S::Domain) -> ApiProvider<C, KeyPoolExecutor<C, S>> {
+        ApiProvider::new(
+            &self.client,
+            KeyPoolExecutor::new(&self.storage, domain, self.comment.as_deref()),
+        )
     }
 }
 
@@ -147,15 +157,44 @@ pub trait WithStorage {
     fn with_storage<'a, S>(
         &'a self,
         storage: &'a S,
-        domain: KeyDomain,
+        domain: S::Domain,
     ) -> ApiProvider<Self, KeyPoolExecutor<Self, S>>
     where
         Self: ApiClient + Sized,
         S: KeyPoolStorage + 'static,
     {
-        ApiProvider::new(self, KeyPoolExecutor::new(storage, domain))
+        ApiProvider::new(self, KeyPoolExecutor::new(storage, domain, None))
     }
 }
 
 #[cfg(feature = "awc")]
 impl WithStorage for awc::Client {}
+
+#[cfg(all(test, feature = "postgres", feature = "awc"))]
+mod test {
+    use tokio::test;
+
+    use super::*;
+    use crate::postgres::test::{setup, Domain};
+
+    #[test]
+    async fn test_pool_request() {
+        let storage = setup().await;
+        let pool = KeyPool::new(awc::Client::default(), storage);
+
+        let response = pool.torn_api(Domain::All).user(|b| b).await.unwrap();
+        _ = response.profile().unwrap();
+    }
+
+    #[test]
+    async fn test_with_storage_request() {
+        let storage = setup().await;
+
+        let response = awc::Client::new()
+            .with_storage(&storage, Domain::All)
+            .user(|b| b)
+            .await
+            .unwrap();
+        _ = response.profile().unwrap();
+    }
+}

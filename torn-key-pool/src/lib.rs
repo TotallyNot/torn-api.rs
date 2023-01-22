@@ -29,31 +29,57 @@ where
     Response(ResponseError),
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum KeyDomain {
-    Public,
-    User(i32),
-    Faction(i32),
-}
-
 pub trait ApiKey: Sync + Send {
     fn value(&self) -> &str;
 }
 
+pub trait KeyDomain: Clone + std::fmt::Debug + Send + Sync {}
+
+impl<T> KeyDomain for T where T: Clone + std::fmt::Debug + Send + Sync {}
+
 #[async_trait]
 pub trait KeyPoolStorage {
     type Key: ApiKey;
+    type Domain: KeyDomain;
     type Error: std::error::Error + Sync + Send;
 
-    async fn acquire_key(&self, domain: KeyDomain) -> Result<Self::Key, Self::Error>;
+    async fn acquire_key(&self, domain: Self::Domain) -> Result<Self::Key, Self::Error>;
 
     async fn acquire_many_keys(
         &self,
-        domain: KeyDomain,
+        domain: Self::Domain,
         number: i64,
     ) -> Result<Vec<Self::Key>, Self::Error>;
 
     async fn flag_key(&self, key: Self::Key, code: u8) -> Result<bool, Self::Error>;
+
+    async fn store_key(
+        &self,
+        key: String,
+        domains: Vec<Self::Domain>,
+    ) -> Result<Self::Key, Self::Error>;
+
+    async fn read_key(&self, key: String) -> Result<Self::Key, Self::Error>;
+
+    async fn remove_key(&self, key: String) -> Result<Self::Key, Self::Error>;
+
+    async fn add_domain_to_key(
+        &self,
+        key: String,
+        domain: Self::Domain,
+    ) -> Result<Self::Key, Self::Error>;
+
+    async fn remove_domain_from_key(
+        &self,
+        key: String,
+        domain: Self::Domain,
+    ) -> Result<Self::Key, Self::Error>;
+
+    async fn set_domains_for_key(
+        &self,
+        key: String,
+        domains: Vec<Self::Domain>,
+    ) -> Result<Self::Key, Self::Error>;
 }
 
 #[derive(Debug, Clone)]
@@ -62,7 +88,8 @@ where
     S: KeyPoolStorage,
 {
     storage: &'a S,
-    domain: KeyDomain,
+    comment: Option<&'a str>,
+    domain: S::Domain,
     _marker: std::marker::PhantomData<C>,
 }
 
@@ -70,52 +97,15 @@ impl<'a, C, S> KeyPoolExecutor<'a, C, S>
 where
     S: KeyPoolStorage,
 {
-    pub fn new(storage: &'a S, domain: KeyDomain) -> Self {
+    pub fn new(storage: &'a S, domain: S::Domain, comment: Option<&'a str>) -> Self {
         Self {
             storage,
             domain,
+            comment,
             _marker: std::marker::PhantomData,
         }
     }
 }
 
 #[cfg(all(test, feature = "postgres"))]
-mod test {
-    use std::sync::Once;
-
-    use tokio::test;
-
-    use super::*;
-
-    static INIT: Once = Once::new();
-
-    pub(crate) async fn setup() -> postgres::PgKeyPoolStorage {
-        INIT.call_once(|| {
-            dotenv::dotenv().ok();
-        });
-
-        let pool = sqlx::PgPool::connect(&std::env::var("DATABASE_URL").unwrap())
-            .await
-            .unwrap();
-
-        sqlx::query("update api_keys set uses=0")
-            .execute(&pool)
-            .await
-            .unwrap();
-
-        postgres::PgKeyPoolStorage::new(pool, 50)
-    }
-
-    #[test]
-    async fn key_pool_bulk() {
-        let storage = setup().await;
-
-        if let Err(e) = storage.initialise().await {
-            panic!("Initialising key storage failed: {:?}", e);
-        }
-
-        let pool = send::KeyPool::new(reqwest::Client::default(), storage);
-
-        pool.torn_api(KeyDomain::Public).users([1], |b| b).await;
-    }
-}
+mod test {}
