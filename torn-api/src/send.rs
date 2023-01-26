@@ -155,6 +155,21 @@ where
             .map(|(i, r)| (num_traits::AsPrimitive::as_(i), r))
             .collect()
     }
+
+    #[cfg(feature = "key")]
+    pub async fn key<F>(&self, build: F) -> Result<crate::key::Response, E::Error>
+    where
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::key::Response>,
+        ) -> crate::ApiRequestBuilder<crate::key::Response>,
+    {
+        let mut builder = crate::ApiRequestBuilder::default();
+        builder = build(builder);
+
+        self.executor
+            .execute(self.client, builder.request, builder.id)
+            .await
+    }
 }
 
 #[async_trait]
