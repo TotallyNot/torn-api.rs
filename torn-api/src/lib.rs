@@ -12,6 +12,9 @@ pub mod faction;
 #[cfg(feature = "torn")]
 pub mod torn;
 
+#[cfg(feature = "key")]
+pub mod key;
+
 #[cfg(feature = "awc")]
 pub mod awc;
 
