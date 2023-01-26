@@ -502,8 +502,18 @@ pub(crate) mod test {
     #[serde(tag = "type", rename_all = "snake_case")]
     pub(crate) enum Domain {
         All,
+        Guild { id: i64 },
         User { id: i32 },
         Faction { id: i32 },
+    }
+
+    impl KeyDomain for Domain {
+        fn fallback(&self) -> Option<Self> {
+            match self {
+                Self::Guild { id: _ } => Some(Self::All),
+                _ => None,
+            }
+        }
     }
 
     pub(crate) async fn setup() -> PgKeyPoolStorage<Domain> {

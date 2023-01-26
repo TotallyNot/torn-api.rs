@@ -39,8 +39,6 @@ pub trait KeyDomain: Clone + std::fmt::Debug + Send + Sync {
     }
 }
 
-impl<T> KeyDomain for T where T: Clone + std::fmt::Debug + Send + Sync {}
-
 #[async_trait]
 pub trait KeyPoolStorage {
     type Key: ApiKey;
