@@ -42,6 +42,7 @@ where
     D: PgKeyDomain,
 {
     pub id: i32,
+    pub user_id: i32,
     pub key: String,
     pub uses: i16,
     pub domains: sqlx::types::Json<Vec<D>>,
@@ -82,13 +83,14 @@ where
         sqlx::query(indoc! {r#"
             CREATE TABLE IF NOT EXISTS api_keys (
                 id serial primary key,
+                user_id int4 not null,
                 key char(16) not null,
                 uses int2 not null default 0,
                 domains jsonb not null default '{}'::jsonb,
                 last_used timestamptz not null default now(),
                 flag int2,
                 cooldown timestamptz,
-                constraint "uq:api_keys.key" UNIQUE(key)
+                constraint "uq:api_keys.key+user_id" UNIQUE(user_id, key)
             )"#
         })
         .execute(&self.pool)
@@ -96,6 +98,12 @@ where
 
         sqlx::query(indoc! {r#"
             CREATE INDEX IF NOT EXISTS "idx:api_keys.domains" ON api_keys USING GIN(domains jsonb_path_ops)
+        "#})
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query(indoc! {r#"
+            CREATE INDEX IF NOT EXISTS "idx:api_keys.user_id" ON api_keys USING BTREE(user_id)
         "#})
         .execute(&self.pool)
         .await?;
@@ -143,10 +151,14 @@ where
                         select 
                             id,
                             0::int2 as uses
-                        from api_keys where last_used < date_trunc('minute', now()) and (cooldown is null or now() >= cooldown) and domains @> $1
+                        from api_keys where last_used < date_trunc('minute', now()) 
+                            and (cooldown is null or now() >= cooldown) 
+                            and domains @> $1
                         union (
                             select id, uses from api_keys 
-                            where last_used >= date_trunc('minute', now()) and (cooldown is null or now() >= cooldown) and domains @> $1
+                            where last_used >= date_trunc('minute', now()) 
+                                and (cooldown is null or now() >= cooldown) 
+                                and domains @> $1
                             order by uses asc
                         )
                         limit 1
@@ -160,6 +172,7 @@ where
                         api_keys.id=key.id and key.uses < $2
                     returning
                         api_keys.id,
+                        api_keys.user_id,
                         api_keys.key,
                         api_keys.uses,
                         api_keys.domains
@@ -170,17 +183,23 @@ where
                 .fetch_optional(&mut tx)
                 .await?;
 
-                            tx.commit().await?;
+                tx.commit().await?;
 
-                Result::<Option<Self::Key>, sqlx::Error>::Ok(
-                    key
-                )
+                Result::<Option<Self::Key>, sqlx::Error>::Ok(key)
             }
             .await;
 
             match attempt {
                 Ok(Some(result)) => return Ok(result),
-                Ok(None) => return Err(PgStorageError::Unavailable(domain)),
+                Ok(None) => {
+                    return self
+                        .acquire_key(
+                            domain
+                                .fallback()
+                                .ok_or_else(|| PgStorageError::Unavailable(domain))?,
+                        )
+                        .await
+                }
                 Err(error) => {
                     if let Some(db_error) = error.as_database_error() {
                         let pg_error: &sqlx::postgres::PgDatabaseError = db_error.downcast_ref();
@@ -213,17 +232,23 @@ where
                 let mut keys: Vec<Self::Key> = sqlx::query_as(&indoc::formatdoc!(
                     r#"select
                         id,
+                        user_id,
                         key,
                         0::int2 as uses,
                         domains
-                    from api_keys where last_used < date_trunc('minute', now()) and (cooldown is null or now() >= cooldown) and domains @> $1
+                    from api_keys where last_used < date_trunc('minute', now()) 
+                        and (cooldown is null or now() >= cooldown) 
+                        and domains @> $1
                     union
                     select
                         id,
+                        user_id,
                         key,
                         uses,
                         domains
-                    from api_keys where last_used >= date_trunc('minute', now()) and (cooldown is null or now() >= cooldown) and domains @> $1
+                    from api_keys where last_used >= date_trunc('minute', now()) 
+                        and (cooldown is null or now() >= cooldown) 
+                        and domains @> $1
                     order by uses limit $2
                 "#,
                 ))
@@ -285,7 +310,16 @@ where
 
             match attempt {
                 Ok(Some(result)) => return Ok(result),
-                Ok(None) => return Err(Self::Error::Unavailable(domain)),
+                Ok(None) => {
+                    return self
+                        .acquire_many_keys(
+                            domain
+                                .fallback()
+                                .ok_or_else(|| Self::Error::Unavailable(domain))?,
+                            number,
+                        )
+                        .await
+                }
                 Err(error) => {
                     if let Some(db_error) = error.as_database_error() {
                         let pg_error: &sqlx::postgres::PgDatabaseError = db_error.downcast_ref();
@@ -303,7 +337,6 @@ where
     }
 
     async fn flag_key(&self, key: Self::Key, code: u8) -> Result<bool, Self::Error> {
-        // TODO: put keys in cooldown when appropriate
         match code {
             2 | 10 | 13 => {
                 // invalid key, owner fedded or owner inactive
@@ -350,21 +383,29 @@ where
         }
     }
 
-    async fn store_key(&self, key: String, domains: Vec<D>) -> Result<Self::Key, Self::Error> {
-        sqlx::query_as("insert into api_keys(key, domains) values ($1, $2) returning *")
-            .bind(&key)
-            .bind(sqlx::types::Json(domains))
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|why| {
-                if let Some(error) = why.as_database_error() {
-                    let pg_error: &sqlx::postgres::PgDatabaseError = error.downcast_ref();
-                    if pg_error.code() == "23505" {
-                        return PgStorageError::DuplicateKey(key);
-                    }
+    async fn store_key(
+        &self,
+        user_id: i32,
+        key: String,
+        domains: Vec<D>,
+    ) -> Result<Self::Key, Self::Error> {
+        sqlx::query_as(
+            "insert into api_keys(user_id, key, domains) values ($1, $2, $3) returning *",
+        )
+        .bind(user_id)
+        .bind(&key)
+        .bind(sqlx::types::Json(domains))
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|why| {
+            if let Some(error) = why.as_database_error() {
+                let pg_error: &sqlx::postgres::PgDatabaseError = error.downcast_ref();
+                if pg_error.code() == "23505" {
+                    return PgStorageError::DuplicateKey(key);
                 }
-                PgStorageError::Pg(why)
-            })
+            }
+            PgStorageError::Pg(why)
+        })
     }
 
     async fn read_key(&self, key: String) -> Result<Self::Key, Self::Error> {
@@ -373,6 +414,14 @@ where
             .fetch_optional(&self.pool)
             .await?
             .ok_or_else(|| PgStorageError::KeyNotFound(key))
+    }
+
+    async fn read_user_keys(&self, user_id: i32) -> Result<Vec<Self::Key>, Self::Error> {
+        sqlx::query_as("select * from api_keys where user_id=$1")
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     async fn remove_key(&self, key: String) -> Result<Self::Key, Self::Error> {
@@ -475,7 +524,7 @@ pub(crate) mod test {
         storage.initialise().await.unwrap();
 
         storage
-            .store_key(std::env::var("APIKEY").unwrap(), vec![Domain::All])
+            .store_key(1, std::env::var("APIKEY").unwrap(), vec![Domain::All])
             .await
             .unwrap();
 
@@ -495,7 +544,7 @@ pub(crate) mod test {
     async fn test_store_duplicate() {
         let storage = setup().await;
         match storage
-            .store_key(std::env::var("APIKEY").unwrap(), vec![])
+            .store_key(1, std::env::var("APIKEY").unwrap(), vec![])
             .await
             .unwrap_err()
         {
@@ -545,10 +594,18 @@ pub(crate) mod test {
     async fn test_store_key() {
         let storage = setup().await;
         let key = storage
-            .store_key("ABCDABCDABCDABCD".to_owned(), vec![])
+            .store_key(1, "ABCDABCDABCDABCD".to_owned(), vec![])
             .await
             .unwrap();
         assert_eq!(key.value(), "ABCDABCDABCDABCD");
+    }
+
+    #[test]
+    async fn test_read_user_keys() {
+        let storage = setup().await;
+
+        let keys = storage.read_user_keys(1).await.unwrap();
+        assert_eq!(keys.len(), 1);
     }
 
     #[test]

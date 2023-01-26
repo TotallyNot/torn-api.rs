@@ -1,13 +1,12 @@
 [package]
 name = "torn-key-pool"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
+authors = ["Pyrit [2111649]"]
 license = "MIT"
 repository = "https://github.com/TotallyNot/torn-api.rs.git"
 homepage = "https://github.com/TotallyNot/torn-api.rs.git"
 description = "A generalised API key pool for torn-api"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 default = [ "postgres", "tokio-runtime" ]

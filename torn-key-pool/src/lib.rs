@@ -33,7 +33,11 @@ pub trait ApiKey: Sync + Send {
     fn value(&self) -> &str;
 }
 
-pub trait KeyDomain: Clone + std::fmt::Debug + Send + Sync {}
+pub trait KeyDomain: Clone + std::fmt::Debug + Send + Sync {
+    fn fallback(&self) -> Option<Self> {
+        None
+    }
+}
 
 impl<T> KeyDomain for T where T: Clone + std::fmt::Debug + Send + Sync {}
 
@@ -55,11 +59,14 @@ pub trait KeyPoolStorage {
 
     async fn store_key(
         &self,
+        user_id: i32,
         key: String,
         domains: Vec<Self::Domain>,
     ) -> Result<Self::Key, Self::Error>;
 
     async fn read_key(&self, key: String) -> Result<Self::Key, Self::Error>;
+
+    async fn read_user_keys(&self, user_id: i32) -> Result<Vec<Self::Key>, Self::Error>;
 
     async fn remove_key(&self, key: String) -> Result<Self::Key, Self::Error>;
 
