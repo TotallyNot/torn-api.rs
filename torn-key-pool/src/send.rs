@@ -128,7 +128,7 @@ where
     S: KeyPoolStorage,
 {
     client: C,
-    storage: S,
+    pub storage: S,
     comment: Option<String>,
 }
 
