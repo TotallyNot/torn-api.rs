@@ -179,7 +179,7 @@ mod test {
 
     #[test]
     async fn test_pool_request() {
-        let storage = setup().await;
+        let (storage, _) = setup().await;
         let pool = KeyPool::new(
             reqwest::Client::default(),
             storage,
@@ -192,7 +192,7 @@ mod test {
 
     #[test]
     async fn test_with_storage_request() {
-        let storage = setup().await;
+        let (storage, _) = setup().await;
 
         let response = reqwest::Client::new()
             .with_storage(&storage, Domain::All)

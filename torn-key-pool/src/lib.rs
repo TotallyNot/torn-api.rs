@@ -30,13 +30,26 @@ where
 }
 
 pub trait ApiKey: Sync + Send {
+    type IdType: PartialEq + Eq + std::hash::Hash;
+
     fn value(&self) -> &str;
+
+    fn id(&self) -> Self::IdType;
 }
 
 pub trait KeyDomain: Clone + std::fmt::Debug + Send + Sync {
     fn fallback(&self) -> Option<Self> {
         None
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum KeySelector<K>
+where
+    K: ApiKey,
+{
+    Key(String),
+    Id(K::IdType),
 }
 
 #[async_trait]
@@ -62,27 +75,27 @@ pub trait KeyPoolStorage {
         domains: Vec<Self::Domain>,
     ) -> Result<Self::Key, Self::Error>;
 
-    async fn read_key(&self, key: String) -> Result<Self::Key, Self::Error>;
+    async fn read_key(&self, key: KeySelector<Self::Key>) -> Result<Self::Key, Self::Error>;
 
     async fn read_user_keys(&self, user_id: i32) -> Result<Vec<Self::Key>, Self::Error>;
 
-    async fn remove_key(&self, key: String) -> Result<Self::Key, Self::Error>;
+    async fn remove_key(&self, key: KeySelector<Self::Key>) -> Result<Self::Key, Self::Error>;
 
     async fn add_domain_to_key(
         &self,
-        key: String,
+        key: KeySelector<Self::Key>,
         domain: Self::Domain,
     ) -> Result<Self::Key, Self::Error>;
 
     async fn remove_domain_from_key(
         &self,
-        key: String,
+        key: KeySelector<Self::Key>,
         domain: Self::Domain,
     ) -> Result<Self::Key, Self::Error>;
 
     async fn set_domains_for_key(
         &self,
-        key: String,
+        key: KeySelector<Self::Key>,
         domains: Vec<Self::Domain>,
     ) -> Result<Self::Key, Self::Error>;
 }
