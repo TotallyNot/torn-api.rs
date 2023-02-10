@@ -61,6 +61,7 @@ pub enum AttackResult {
     Timeout,
     Stalemate,
     Special,
+    Looted,
 }
 
 #[derive(Debug, Clone, Deserialize)]
