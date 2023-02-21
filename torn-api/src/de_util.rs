@@ -37,7 +37,8 @@ where
     if i == 0 {
         Ok(None)
     } else {
-        let naive = NaiveDateTime::from_timestamp(i, 0);
+        let naive = NaiveDateTime::from_timestamp_opt(i, 0)
+            .ok_or_else(|| D::Error::invalid_value(Unexpected::Signed(i), &"Epoch timestamp"))?;
         Ok(Some(DateTime::from_utc(naive, Utc)))
     }
 }
@@ -85,6 +86,45 @@ where
             } else {
                 Err(E::invalid_value(Unexpected::Str(v), &self))
             }
+        }
+    }
+
+    deserializer.deserialize_any(DumbVisitor)
+}
+
+#[cfg(feature = "decimal")]
+pub(crate) fn string_or_decimal<'de, D>(deserializer: D) -> Result<rust_decimal::Decimal, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct DumbVisitor;
+
+    impl<'de> Visitor<'de> for DumbVisitor {
+        type Value = rust_decimal::Decimal;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "integer or float as string")
+        }
+
+        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: Error,
+        {
+            Ok(v.into())
+        }
+
+        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+        where
+            E: Error,
+        {
+            Ok(v.into())
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: Error,
+        {
+            rust_decimal::Decimal::from_str_exact(v).map_err(E::custom)
         }
     }
 

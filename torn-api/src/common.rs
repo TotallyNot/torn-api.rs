@@ -47,4 +47,12 @@ pub struct Territory {
     pub density: i16,
     pub daily_respect: i16,
     pub faction: i32,
+
+    #[cfg(feature = "decimal")]
+    #[serde(deserialize_with = "de_util::string_or_decimal")]
+    pub coordinate_x: rust_decimal::Decimal,
+
+    #[cfg(feature = "decimal")]
+    #[serde(deserialize_with = "de_util::string_or_decimal")]
+    pub coordinate_y: rust_decimal::Decimal,
 }
