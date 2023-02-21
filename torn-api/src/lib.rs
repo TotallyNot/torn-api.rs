@@ -165,7 +165,7 @@ impl<A> ApiRequest<A>
 where
     A: ApiCategoryResponse,
 {
-    pub fn url(&self, key: &str, id: Option<i64>) -> String {
+    pub fn url(&self, key: &str, id: Option<&str>) -> String {
         let mut url = format!("https://api.torn.com/{}/", A::Selection::category());
 
         if let Some(id) = id {
@@ -195,7 +195,7 @@ where
     A: ApiCategoryResponse,
 {
     request: ApiRequest<A>,
-    id: Option<i64>,
+    id: Option<String>,
 }
 
 impl<A> Default for ApiRequestBuilder<A>
@@ -243,9 +243,9 @@ where
     #[must_use]
     pub fn id<I>(mut self, id: I) -> Self
     where
-        I: num_traits::AsPrimitive<i64>,
+        I: ToString,
     {
-        self.id = Some(id.as_());
+        self.id = Some(id.to_string());
         self
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use chrono::{serde::ts_seconds, DateTime, Utc};
 use serde::Deserialize;
@@ -7,7 +7,7 @@ use torn_api_macros::ApiCategory;
 
 use crate::de_util;
 
-pub use crate::common::{LastAction, Status};
+pub use crate::common::{LastAction, Status, Territory};
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "faction")]
@@ -20,6 +20,9 @@ pub enum Selection {
 
     #[api(type = "BTreeMap<i32, AttackFull>", field = "attacks")]
     Attacks,
+
+    #[api(type = "HashMap<String, Territory>", field = "territory")]
+    Territory,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -164,12 +167,15 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .faction(|b| b.selections(&[Selection::Basic, Selection::Attacks]))
+            .faction(|b| {
+                b.selections(&[Selection::Basic, Selection::Attacks, Selection::Territory])
+            })
             .await
             .unwrap();
 
         response.basic().unwrap();
         response.attacks().unwrap();
         response.attacks_full().unwrap();
+        response.territory().unwrap();
     }
 }

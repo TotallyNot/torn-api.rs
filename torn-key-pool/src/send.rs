@@ -21,7 +21,7 @@ where
         &self,
         client: &C,
         mut request: ApiRequest<A>,
-        id: Option<i64>,
+        id: Option<String>,
     ) -> Result<A, Self::Error>
     where
         A: ApiCategoryResponse,
@@ -33,7 +33,7 @@ where
                 .acquire_key(self.domain.clone())
                 .await
                 .map_err(|e| KeyPoolError::Storage(Arc::new(e)))?;
-            let url = request.url(key.value(), id);
+            let url = request.url(key.value(), id.as_deref());
             let value = client.request(url).await?;
 
             match ApiResponse::from_value(value) {
@@ -54,14 +54,15 @@ where
         }
     }
 
-    async fn execute_many<A>(
+    async fn execute_many<A, I>(
         &self,
         client: &C,
         mut request: ApiRequest<A>,
-        ids: Vec<i64>,
-    ) -> HashMap<i64, Result<A, Self::Error>>
+        ids: Vec<I>,
+    ) -> HashMap<I, Result<A, Self::Error>>
     where
         A: ApiCategoryResponse,
+        I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync,
     {
         let keys = match self
             .storage
@@ -81,43 +82,47 @@ where
         request.comment = self.comment.map(ToOwned::to_owned);
         let request_ref = &request;
 
-        futures::future::join_all(std::iter::zip(ids, keys).map(|(id, mut key)| async move {
-            loop {
-                let url = request_ref.url(key.value(), Some(id));
-                let value = match client.request(url).await {
-                    Ok(v) => v,
-                    Err(why) => return (id, Err(Self::Error::Client(why))),
-                };
+        let tuples =
+            futures::future::join_all(std::iter::zip(ids, keys).map(|(id, mut key)| async move {
+                let id_string = id.to_string();
+                loop {
+                    let url = request_ref.url(key.value(), Some(&id_string));
+                    let value = match client.request(url).await {
+                        Ok(v) => v,
+                        Err(why) => return (id, Err(Self::Error::Client(why))),
+                    };
 
-                match ApiResponse::from_value(value) {
-                    Err(ResponseError::Api { code, reason }) => {
-                        match self.storage.flag_key(key, code).await {
-                            Ok(false) => {
-                                return (
-                                    id,
-                                    Err(KeyPoolError::Response(ResponseError::Api {
-                                        code,
-                                        reason,
-                                    })),
-                                )
+                    match ApiResponse::from_value(value) {
+                        Err(ResponseError::Api { code, reason }) => {
+                            match self.storage.flag_key(key, code).await {
+                                Ok(false) => {
+                                    return (
+                                        id,
+                                        Err(KeyPoolError::Response(ResponseError::Api {
+                                            code,
+                                            reason,
+                                        })),
+                                    )
+                                }
+                                Ok(true) => (),
+                                Err(why) => return (id, Err(KeyPoolError::Storage(Arc::new(why)))),
                             }
-                            Ok(true) => (),
-                            Err(why) => return (id, Err(KeyPoolError::Storage(Arc::new(why)))),
                         }
-                    }
-                    Err(parsing_error) => return (id, Err(KeyPoolError::Response(parsing_error))),
-                    Ok(res) => return (id, Ok(A::from_response(res))),
-                };
+                        Err(parsing_error) => {
+                            return (id, Err(KeyPoolError::Response(parsing_error)))
+                        }
+                        Ok(res) => return (id, Ok(A::from_response(res))),
+                    };
 
-                key = match self.storage.acquire_key(self.domain.clone()).await {
-                    Ok(k) => k,
-                    Err(why) => return (id, Err(Self::Error::Storage(Arc::new(why)))),
-                };
-            }
-        }))
-        .await
-        .into_iter()
-        .collect()
+                    key = match self.storage.acquire_key(self.domain.clone()).await {
+                        Ok(k) => k,
+                        Err(why) => return (id, Err(Self::Error::Storage(Arc::new(why)))),
+                    };
+                }
+            }))
+            .await;
+
+        HashMap::from_iter(tuples)
     }
 }
 

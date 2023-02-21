@@ -39,3 +39,12 @@ pub struct Status<'a> {
     #[serde(deserialize_with = "de_util::zero_date_is_none")]
     pub until: Option<DateTime<Utc>>,
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Territory {
+    pub sector: i16,
+    pub size: i16,
+    pub density: i16,
+    pub daily_respect: i16,
+    pub faction: i32,
+}

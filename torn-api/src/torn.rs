@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use chrono::{DateTime, Utc};
 use serde::{
     de::{self, MapAccess, Visitor},
     Deserialize,
@@ -16,6 +19,9 @@ pub enum Selection {
         type = "Option<Competition>"
     )]
     Competition,
+
+    #[api(type = "HashMap<String, TerritoryWar>", field = "territorywars")]
+    TerritoryWars,
 }
 
 #[derive(Deserialize)]
@@ -94,6 +100,17 @@ where
     deserializer.deserialize_option(CompetitionVisitor)
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct TerritoryWar {
+    pub assaulting_faction: i32,
+    pub defending_faction: i32,
+
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub started: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub ends: DateTime<Utc>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -105,10 +122,11 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .torn(|b| b.selections(&[Selection::Competition]))
+            .torn(|b| b.selections(&[Selection::Competition, Selection::TerritoryWars]))
             .await
             .unwrap();
 
         response.competition().unwrap();
+        response.territory_wars().unwrap();
     }
 }
