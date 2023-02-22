@@ -432,19 +432,38 @@ where
         .map_err(Into::into)
     }
 
-    async fn read_key(&self, selector: KeySelector<Self::Key>) -> Result<Self::Key, Self::Error> {
+    async fn read_key(
+        &self,
+        selector: KeySelector<Self::Key>,
+    ) -> Result<Option<Self::Key>, Self::Error> {
         match &selector {
             KeySelector::Key(key) => sqlx::query_as("select * from api_keys where key=$1")
                 .bind(key)
                 .fetch_optional(&self.pool)
-                .await?
-                .ok_or_else(|| PgStorageError::KeyNotFound(selector)),
+                .await
+                .map_err(Into::into),
             KeySelector::Id(id) => sqlx::query_as("select * from api_keys where id=$1")
                 .bind(id)
                 .fetch_optional(&self.pool)
-                .await?
-                .ok_or_else(|| PgStorageError::KeyNotFound(selector)),
+                .await
+                .map_err(Into::into),
         }
+    }
+
+    async fn query_key(&self, domain: D) -> Result<Option<Self::Key>, Self::Error> {
+        sqlx::query_as("select * from api_keys where domains @> $1 limit 1")
+            .bind(sqlx::types::Json(vec![domain]))
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn query_all(&self, domain: D) -> Result<Vec<Self::Key>, Self::Error> {
+        sqlx::query_as("select * from api_keys where domains @> $1")
+            .bind(sqlx::types::Json(vec![domain]))
+            .fetch_all(&self.pool)
+            .await
+            .map_err(Into::into)
     }
 
     async fn read_user_keys(&self, user_id: i32) -> Result<Vec<Self::Key>, Self::Error> {
@@ -844,5 +863,53 @@ pub(crate) mod test {
                 .await
                 .unwrap();
         }
+    }
+
+    #[test]
+    async fn read_key() {
+        let (storage, key) = setup().await;
+
+        let key = storage.read_key(KeySelector::Key(key.key)).await.unwrap();
+        assert!(key.is_some());
+    }
+
+    #[test]
+    async fn read_key_id() {
+        let (storage, key) = setup().await;
+
+        let key = storage.read_key(KeySelector::Id(key.id)).await.unwrap();
+        assert!(key.is_some());
+    }
+
+    #[test]
+    async fn read_nonexistent_key() {
+        let (storage, _) = setup().await;
+
+        let key = storage.read_key(KeySelector::Id(-1)).await.unwrap();
+        assert!(key.is_none());
+    }
+
+    #[test]
+    async fn query_key() {
+        let (storage, _) = setup().await;
+
+        let key = storage.query_key(Domain::All).await.unwrap();
+        assert!(key.is_some());
+    }
+
+    #[test]
+    async fn query_nonexistent_key() {
+        let (storage, _) = setup().await;
+
+        let key = storage.query_key(Domain::Guild { id: 0 }).await.unwrap();
+        assert!(key.is_none());
+    }
+
+    #[test]
+    async fn query_all() {
+        let (storage, _) = setup().await;
+
+        let keys = storage.query_all(Domain::All).await.unwrap();
+        assert!(keys.len() == 1);
     }
 }
