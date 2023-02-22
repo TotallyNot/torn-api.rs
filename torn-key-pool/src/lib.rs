@@ -75,11 +75,16 @@ pub trait KeyPoolStorage {
         domains: Vec<Self::Domain>,
     ) -> Result<Self::Key, Self::Error>;
 
-    async fn read_key(&self, key: KeySelector<Self::Key>) -> Result<Self::Key, Self::Error>;
+    async fn read_key(&self, key: KeySelector<Self::Key>)
+        -> Result<Option<Self::Key>, Self::Error>;
 
     async fn read_user_keys(&self, user_id: i32) -> Result<Vec<Self::Key>, Self::Error>;
 
     async fn remove_key(&self, key: KeySelector<Self::Key>) -> Result<Self::Key, Self::Error>;
+
+    async fn query_key(&self, domain: Self::Domain) -> Result<Option<Self::Key>, Self::Error>;
+
+    async fn query_all(&self, domain: Self::Domain) -> Result<Vec<Self::Key>, Self::Error>;
 
     async fn add_domain_to_key(
         &self,
