@@ -96,7 +96,7 @@ impl ApiResponse {
     }
 }
 
-pub trait ApiSelection {
+pub trait ApiSelection: Send + Sync {
     fn raw_value(&self) -> &'static str;
 
     fn category() -> &'static str;
@@ -137,7 +137,7 @@ where
 #[derive(Debug)]
 pub struct ApiRequest<A>
 where
-    A: ApiCategoryResponse,
+    A: ApiSelection,
 {
     pub selections: Vec<&'static str>,
     pub from: Option<DateTime<Utc>>,
@@ -148,7 +148,7 @@ where
 
 impl<A> std::default::Default for ApiRequest<A>
 where
-    A: ApiCategoryResponse,
+    A: ApiSelection,
 {
     fn default() -> Self {
         Self {
@@ -163,10 +163,10 @@ where
 
 impl<A> ApiRequest<A>
 where
-    A: ApiCategoryResponse,
+    A: ApiSelection,
 {
     pub fn url(&self, key: &str, id: Option<&str>) -> String {
-        let mut url = format!("https://api.torn.com/{}/", A::Selection::category());
+        let mut url = format!("https://api.torn.com/{}/", A::category());
 
         if let Some(id) = id {
             write!(url, "{}", id).unwrap();
@@ -192,7 +192,7 @@ where
 
 pub struct ApiRequestBuilder<A>
 where
-    A: ApiCategoryResponse,
+    A: ApiSelection,
 {
     request: ApiRequest<A>,
     id: Option<String>,
@@ -200,7 +200,7 @@ where
 
 impl<A> Default for ApiRequestBuilder<A>
 where
-    A: ApiCategoryResponse,
+    A: ApiSelection,
 {
     fn default() -> Self {
         Self {
@@ -212,10 +212,10 @@ where
 
 impl<A> ApiRequestBuilder<A>
 where
-    A: ApiCategoryResponse,
+    A: ApiSelection,
 {
     #[must_use]
-    pub fn selections(mut self, selections: &[A::Selection]) -> Self {
+    pub fn selections(mut self, selections: &[A]) -> Self {
         self.request
             .selections
             .append(&mut selections.iter().map(ApiSelection::raw_value).collect());

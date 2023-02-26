@@ -1,6 +1,6 @@
 [package]
 name = "torn-key-pool"
-version = "0.5.5"
+version = "0.5.6"
 edition = "2021"
 authors = ["Pyrit [2111649]"]
 license = "MIT"
@@ -17,7 +17,7 @@ tokio-runtime = [ "dep:tokio", "dep:rand" ]
 actix-runtime = [ "dep:actix-rt", "dep:rand" ]
 
 [dependencies]
-torn-api = { path = "../torn-api", default-features = false, version = "0.5.5" }
+torn-api = { path = "../torn-api", default-features = false, version = "0.5.10" }
 async-trait = "0.1"
 thiserror = "1"
 

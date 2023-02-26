@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 
-use crate::{ApiCategoryResponse, ApiClientError, ApiRequest, ApiResponse, DirectExecutor};
+use crate::{
+    ApiCategoryResponse, ApiClientError, ApiRequest, ApiResponse, ApiSelection, DirectExecutor,
+};
 
 pub struct ApiProvider<'a, C, E>
 where
@@ -28,8 +30,8 @@ where
     pub async fn user<F>(&self, build: F) -> Result<crate::user::Response, E::Error>
     where
         F: FnOnce(
-            crate::ApiRequestBuilder<crate::user::Response>,
-        ) -> crate::ApiRequestBuilder<crate::user::Response>,
+            crate::ApiRequestBuilder<crate::user::Selection>,
+        ) -> crate::ApiRequestBuilder<crate::user::Selection>,
     {
         let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
@@ -37,6 +39,7 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
+            .map(crate::user::Response::from_response)
     }
 
     #[cfg(feature = "user")]
@@ -47,8 +50,8 @@ where
     ) -> HashMap<I, Result<crate::user::Response, E::Error>>
     where
         F: FnOnce(
-            crate::ApiRequestBuilder<crate::user::Response>,
-        ) -> crate::ApiRequestBuilder<crate::user::Response>,
+            crate::ApiRequestBuilder<crate::user::Selection>,
+        ) -> crate::ApiRequestBuilder<crate::user::Selection>,
         I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync,
         L: IntoIterator<Item = I>,
     {
@@ -58,14 +61,17 @@ where
         self.executor
             .execute_many(self.client, builder.request, Vec::from_iter(ids))
             .await
+            .into_iter()
+            .map(|(k, v)| (k, v.map(crate::user::Response::from_response)))
+            .collect()
     }
 
     #[cfg(feature = "faction")]
     pub async fn faction<F>(&self, build: F) -> Result<crate::faction::Response, E::Error>
     where
         F: FnOnce(
-            crate::ApiRequestBuilder<crate::faction::Response>,
-        ) -> crate::ApiRequestBuilder<crate::faction::Response>,
+            crate::ApiRequestBuilder<crate::faction::Selection>,
+        ) -> crate::ApiRequestBuilder<crate::faction::Selection>,
     {
         let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
@@ -73,6 +79,7 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
+            .map(crate::faction::Response::from_response)
     }
 
     #[cfg(feature = "faction")]
@@ -83,8 +90,8 @@ where
     ) -> HashMap<I, Result<crate::faction::Response, E::Error>>
     where
         F: FnOnce(
-            crate::ApiRequestBuilder<crate::faction::Response>,
-        ) -> crate::ApiRequestBuilder<crate::faction::Response>,
+            crate::ApiRequestBuilder<crate::faction::Selection>,
+        ) -> crate::ApiRequestBuilder<crate::faction::Selection>,
         I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync,
         L: IntoIterator<Item = I>,
     {
@@ -94,14 +101,17 @@ where
         self.executor
             .execute_many(self.client, builder.request, Vec::from_iter(ids))
             .await
+            .into_iter()
+            .map(|(k, v)| (k, v.map(crate::faction::Response::from_response)))
+            .collect()
     }
 
     #[cfg(feature = "torn")]
     pub async fn torn<F>(&self, build: F) -> Result<crate::torn::Response, E::Error>
     where
         F: FnOnce(
-            crate::ApiRequestBuilder<crate::torn::Response>,
-        ) -> crate::ApiRequestBuilder<crate::torn::Response>,
+            crate::ApiRequestBuilder<crate::torn::Selection>,
+        ) -> crate::ApiRequestBuilder<crate::torn::Selection>,
     {
         let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
@@ -109,6 +119,7 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
+            .map(crate::torn::Response::from_response)
     }
 
     #[cfg(feature = "torn")]
@@ -119,8 +130,8 @@ where
     ) -> HashMap<I, Result<crate::torn::Response, E::Error>>
     where
         F: FnOnce(
-            crate::ApiRequestBuilder<crate::torn::Response>,
-        ) -> crate::ApiRequestBuilder<crate::torn::Response>,
+            crate::ApiRequestBuilder<crate::torn::Selection>,
+        ) -> crate::ApiRequestBuilder<crate::torn::Selection>,
         I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync,
         L: IntoIterator<Item = I>,
     {
@@ -130,14 +141,17 @@ where
         self.executor
             .execute_many(self.client, builder.request, Vec::from_iter(ids))
             .await
+            .into_iter()
+            .map(|(k, v)| (k, v.map(crate::torn::Response::from_response)))
+            .collect()
     }
 
     #[cfg(feature = "key")]
     pub async fn key<F>(&self, build: F) -> Result<crate::key::Response, E::Error>
     where
         F: FnOnce(
-            crate::ApiRequestBuilder<crate::key::Response>,
-        ) -> crate::ApiRequestBuilder<crate::key::Response>,
+            crate::ApiRequestBuilder<crate::key::Selection>,
+        ) -> crate::ApiRequestBuilder<crate::key::Selection>,
     {
         let mut builder = crate::ApiRequestBuilder::default();
         builder = build(builder);
@@ -145,6 +159,7 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
+            .map(crate::key::Response::from_response)
     }
 }
 
@@ -160,18 +175,18 @@ where
         client: &C,
         request: ApiRequest<A>,
         id: Option<String>,
-    ) -> Result<A, Self::Error>
+    ) -> Result<ApiResponse, Self::Error>
     where
-        A: ApiCategoryResponse;
+        A: ApiSelection;
 
     async fn execute_many<A, I>(
         &self,
         client: &C,
         request: ApiRequest<A>,
         ids: Vec<I>,
-    ) -> HashMap<I, Result<A, Self::Error>>
+    ) -> HashMap<I, Result<ApiResponse, Self::Error>>
     where
-        A: ApiCategoryResponse,
+        A: ApiSelection,
         I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync;
 }
 
@@ -187,15 +202,15 @@ where
         client: &C,
         request: ApiRequest<A>,
         id: Option<String>,
-    ) -> Result<A, Self::Error>
+    ) -> Result<ApiResponse, Self::Error>
     where
-        A: ApiCategoryResponse,
+        A: ApiSelection,
     {
         let url = request.url(&self.key, id.as_deref());
 
         let value = client.request(url).await.map_err(ApiClientError::Client)?;
 
-        Ok(A::from_response(ApiResponse::from_value(value)?))
+        Ok(ApiResponse::from_value(value)?)
     }
 
     async fn execute_many<A, I>(
@@ -203,9 +218,9 @@ where
         client: &C,
         request: ApiRequest<A>,
         ids: Vec<I>,
-    ) -> HashMap<I, Result<A, Self::Error>>
+    ) -> HashMap<I, Result<ApiResponse, Self::Error>>
     where
-        A: ApiCategoryResponse,
+        A: ApiSelection,
         I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync,
     {
         let request_ref = &request;
@@ -217,9 +232,7 @@ where
 
             (
                 i,
-                value
-                    .and_then(|v| ApiResponse::from_value(v).map_err(Into::into))
-                    .map(A::from_response),
+                value.and_then(|v| ApiResponse::from_value(v).map_err(Into::into)),
             )
         }))
         .await;

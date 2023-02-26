@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use torn_api::{
     local::{ApiClient, ApiProvider, RequestExecutor},
-    ApiCategoryResponse, ApiRequest, ApiResponse, ResponseError,
+    ApiRequest, ApiResponse, ApiSelection, ResponseError,
 };
 
 use crate::{ApiKey, KeyPoolError, KeyPoolExecutor, KeyPoolStorage};
@@ -22,9 +22,9 @@ where
         client: &C,
         mut request: ApiRequest<A>,
         id: Option<String>,
-    ) -> Result<A, Self::Error>
+    ) -> Result<ApiResponse, Self::Error>
     where
-        A: ApiCategoryResponse,
+        A: ApiSelection,
     {
         request.comment = self.comment.map(ToOwned::to_owned);
         loop {
@@ -49,7 +49,7 @@ where
                     }
                 }
                 Err(parsing_error) => return Err(KeyPoolError::Response(parsing_error)),
-                Ok(res) => return Ok(A::from_response(res)),
+                Ok(res) => return Ok(res),
             };
         }
     }
@@ -59,9 +59,9 @@ where
         client: &C,
         mut request: ApiRequest<A>,
         ids: Vec<I>,
-    ) -> HashMap<I, Result<A, Self::Error>>
+    ) -> HashMap<I, Result<ApiResponse, Self::Error>>
     where
-        A: ApiCategoryResponse,
+        A: ApiSelection,
         I: ToString + std::hash::Hash + std::cmp::Eq,
     {
         let keys = match self
@@ -111,7 +111,7 @@ where
                         Err(parsing_error) => {
                             return (id, Err(KeyPoolError::Response(parsing_error)))
                         }
-                        Ok(res) => return (id, Ok(A::from_response(res))),
+                        Ok(res) => return (id, Ok(res)),
                     };
 
                     key = match self.storage.acquire_key(self.domain.clone()).await {
