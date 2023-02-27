@@ -169,6 +169,7 @@ where
                     .execute(&mut tx)
                     .await?;
 
+                // TODO: improve query
                 let key = sqlx::query_as(&indoc::formatdoc!(
                     r#"
                     with key as (
@@ -183,9 +184,9 @@ where
                             where last_used >= date_trunc('minute', now()) 
                                 and (cooldown is null or now() >= cooldown) 
                                 and domains @> $1
-                            order by uses asc
+                            order by uses asc limit 1
                         )
-                        limit 1
+                        order by uses asc limit 1
                     )
                     update api_keys set
                         uses = key.uses + 1,
@@ -761,6 +762,25 @@ pub(crate) mod test {
 
         if let Err(e) = storage.acquire_key(Domain::All).await {
             panic!("Acquiring key failed: {:?}", e);
+        }
+    }
+
+    #[test]
+    async fn uses_spread() {
+        let (storage, _) = setup().await;
+        storage
+            .store_key(1, "ABC".to_owned(), vec![Domain::All])
+            .await
+            .unwrap();
+
+        for _ in 0..10 {
+            _ = storage.acquire_key(Domain::All).await.unwrap();
+        }
+
+        let keys = storage.read_user_keys(1).await.unwrap();
+        assert_eq!(keys.len(), 2);
+        for key in keys {
+            assert_eq!(key.uses, 5);
         }
     }
 
