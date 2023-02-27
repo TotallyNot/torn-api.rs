@@ -33,7 +33,7 @@ use serde::{de::Error as DeError, Deserialize};
 use thiserror::Error;
 
 pub struct ApiResponse {
-    value: serde_json::Value,
+    pub value: serde_json::Value,
 }
 
 #[derive(Error, Debug)]
