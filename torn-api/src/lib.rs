@@ -140,8 +140,8 @@ where
     A: ApiSelection,
 {
     pub selections: Vec<&'static str>,
-    pub from: Option<DateTime<Utc>>,
-    pub to: Option<DateTime<Utc>>,
+    pub from: Option<i64>,
+    pub to: Option<i64>,
     pub comment: Option<String>,
     phantom: std::marker::PhantomData<A>,
 }
@@ -175,11 +175,11 @@ where
         write!(url, "?selections={}&key={}", self.selections.join(","), key).unwrap();
 
         if let Some(from) = self.from {
-            write!(url, "&from={}", from.timestamp()).unwrap();
+            write!(url, "&from={}", from).unwrap();
         }
 
         if let Some(to) = self.to {
-            write!(url, "&to={}", to.timestamp()).unwrap();
+            write!(url, "&to={}", to).unwrap();
         }
 
         if let Some(comment) = &self.comment {
@@ -224,12 +224,24 @@ where
 
     #[must_use]
     pub fn from(mut self, from: DateTime<Utc>) -> Self {
+        self.request.from = Some(from.timestamp());
+        self
+    }
+
+    #[must_use]
+    pub fn from_timestamp(mut self, from: i64) -> Self {
         self.request.from = Some(from);
         self
     }
 
     #[must_use]
     pub fn to(mut self, to: DateTime<Utc>) -> Self {
+        self.request.to = Some(to.timestamp());
+        self
+    }
+
+    #[must_use]
+    pub fn to_timestamp(mut self, to: i64) -> Self {
         self.request.to = Some(to);
         self
     }
