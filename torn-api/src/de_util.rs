@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::de::{Deserialize, Deserializer, Error, Unexpected, Visitor};
 
@@ -90,6 +92,47 @@ where
     }
 
     deserializer.deserialize_any(DumbVisitor)
+}
+
+pub(crate) fn datetime_map<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<i32, chrono::DateTime<chrono::Utc>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    struct UnixTimestamp(
+        #[serde(with = "chrono::serde::ts_seconds")] chrono::DateTime<chrono::Utc>,
+    );
+
+    struct MapVisitor;
+
+    impl<'de> Visitor<'de> for MapVisitor {
+        type Value = BTreeMap<i32, chrono::DateTime<chrono::Utc>>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "map of unix timestamps")
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            let mut result = BTreeMap::new();
+            while let Some(key) = map.next_key::<&'de str>()? {
+                let id = key
+                    .parse()
+                    .map_err(|_e| A::Error::invalid_value(Unexpected::Str(key), &"integer"))?;
+
+                let ts: UnixTimestamp = map.next_value()?;
+                result.insert(id, ts.0);
+            }
+
+            Ok(result)
+        }
+    }
+
+    deserializer.deserialize_map(MapVisitor)
 }
 
 #[cfg(feature = "decimal")]

@@ -36,6 +36,21 @@ pub struct Member<'a> {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct FactionTerritoryWar<'a> {
+    pub territory: &'a str,
+    pub assaulting_faction: i32,
+    pub defending_faction: i32,
+    pub score: i32,
+    pub required_score: i32,
+
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub start_time: DateTime<Utc>,
+
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub end_time: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Basic<'a> {
     #[serde(rename = "ID")]
     pub id: i32,
@@ -49,6 +64,12 @@ pub struct Basic<'a> {
 
     #[serde(borrow)]
     pub members: BTreeMap<i32, Member<'a>>,
+
+    #[serde(deserialize_with = "de_util::datetime_map")]
+    pub peace: BTreeMap<i32, DateTime<Utc>>,
+
+    #[serde(borrow)]
+    pub territory_wars: Vec<FactionTerritoryWar<'a>>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
