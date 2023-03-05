@@ -852,6 +852,45 @@ pub(crate) mod test {
         }
     }
 
+    #[test]
+    async fn test_concurrent_spread() {
+        let storage = Arc::new(setup().await.0);
+
+        for i in 0..24 {
+            storage
+                .store_key(1, format!("{}", i), vec![Domain::All])
+                .await
+                .unwrap();
+        }
+
+        for _ in 0..10 {
+            let mut set = tokio::task::JoinSet::new();
+
+            for _ in 0..50 {
+                let storage = storage.clone();
+                set.spawn(async move {
+                    storage.acquire_key(Domain::All).await.unwrap();
+                });
+            }
+
+            for _ in 0..50 {
+                set.join_next().await.unwrap().unwrap();
+            }
+
+            let keys = storage.read_user_keys(1).await.unwrap();
+
+            assert_eq!(keys.len(), 25);
+
+            for key in keys {
+                assert_eq!(key.uses, 2);
+            }
+
+            sqlx::query("update api_keys set uses=0")
+                .execute(&storage.pool)
+                .await
+                .unwrap();
+        }
+    }
     // HACK: this test is time sensitive and will fail if runs at the top of the minute
     #[test]
     async fn test_concurrent_many() {
