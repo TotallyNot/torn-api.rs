@@ -68,7 +68,7 @@ pub struct Basic<'a> {
     #[serde(deserialize_with = "de_util::datetime_map")]
     pub peace: BTreeMap<i32, DateTime<Utc>>,
 
-    #[serde(borrow)]
+    #[serde(borrow, deserialize_with = "de_util::empty_dict_is_empty_array")]
     pub territory_wars: Vec<FactionTerritoryWar<'a>>,
 }
 
