@@ -135,6 +135,53 @@ where
     deserializer.deserialize_map(MapVisitor)
 }
 
+pub(crate) fn empty_dict_is_empty_array<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    struct ArrayVisitor<T>(std::marker::PhantomData<T>);
+
+    impl<'de, T> Visitor<'de> for ArrayVisitor<T>
+    where
+        T: Deserialize<'de>,
+    {
+        type Value = Vec<T>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "vec or empty object")
+        }
+
+        fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            match map.size_hint() {
+                Some(0) | None => Ok(Vec::default()),
+                Some(len) => Err(A::Error::invalid_length(len, &"empty dict")),
+            }
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let mut result = match seq.size_hint() {
+                Some(len) => Vec::with_capacity(len),
+                None => Vec::default(),
+            };
+
+            while let Some(element) = seq.next_element()? {
+                result.push(element);
+            }
+
+            Ok(result)
+        }
+    }
+
+    deserializer.deserialize_any(ArrayVisitor(std::marker::PhantomData))
+}
+
 #[cfg(feature = "decimal")]
 pub(crate) fn string_or_decimal<'de, D>(deserializer: D) -> Result<rust_decimal::Decimal, D::Error>
 where
