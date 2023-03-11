@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use torn_api_macros::ApiCategory;
 
-use crate::de_util;
+use crate::de_util::{self, null_is_empty_dict};
 
 pub use crate::common::{LastAction, Status, Territory};
 
@@ -21,7 +21,11 @@ pub enum Selection {
     #[api(type = "BTreeMap<i32, AttackFull>", field = "attacks")]
     Attacks,
 
-    #[api(type = "HashMap<String, Territory>", field = "territory")]
+    #[api(
+        type = "HashMap<String, Territory>",
+        field = "territory",
+        with = "null_is_empty_dict"
+    )]
     Territory,
 }
 
@@ -197,6 +201,23 @@ mod tests {
         response.basic().unwrap();
         response.attacks().unwrap();
         response.attacks_full().unwrap();
+        response.territory().unwrap();
+    }
+
+    #[async_test]
+    async fn destroyed_faction() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .faction(|b| {
+                b.id(8981)
+                    .selections(&[Selection::Basic, Selection::Territory])
+            })
+            .await
+            .unwrap();
+
+        response.basic().unwrap();
         response.territory().unwrap();
     }
 }
