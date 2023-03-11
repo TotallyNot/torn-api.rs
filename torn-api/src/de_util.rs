@@ -1,8 +1,8 @@
 #![allow(unused)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{serde::ts_nanoseconds::deserialize, DateTime, NaiveDateTime, Utc};
 use serde::de::{Deserialize, Deserializer, Error, Unexpected, Visitor};
 
 pub(crate) fn empty_string_is_none<'de, D>(deserializer: D) -> Result<Option<&'de str>, D::Error>
@@ -180,6 +180,15 @@ where
     }
 
     deserializer.deserialize_any(ArrayVisitor(std::marker::PhantomData))
+}
+
+pub(crate) fn null_is_empty_dict<'de, D, K, V>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
+where
+    D: Deserializer<'de>,
+    K: std::hash::Hash + std::cmp::Eq + Deserialize<'de>,
+    V: Deserialize<'de>,
+{
+    Ok(Option::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[cfg(feature = "decimal")]
