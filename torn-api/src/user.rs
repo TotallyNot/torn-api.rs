@@ -168,9 +168,13 @@ pub enum EliminationTeam {
 #[derive(Debug, Clone)]
 pub enum Competition {
     Elimination {
-        score: i16,
+        score: i32,
         attacks: i16,
         team: EliminationTeam,
+    },
+    DogTags {
+        score: i32,
+        position: Option<i32>,
     },
 }
 
@@ -186,11 +190,14 @@ where
         Team,
         Attacks,
         TeamName,
+        Position,
     }
 
     #[derive(Deserialize)]
     enum CompetitionName {
         Elimination,
+        #[serde(rename = "Dog Tags")]
+        DogTags,
     }
 
     struct CompetitionVisitor;
@@ -224,6 +231,7 @@ where
             let mut score = None;
             let mut attacks = None;
             let mut name = None;
+            let mut position = None;
 
             while let Some(key) = map.next_key()? {
                 match key {
@@ -235,6 +243,9 @@ where
                     }
                     Field::Attacks => {
                         attacks = Some(map.next_value()?);
+                    }
+                    Field::Position => {
+                        position = Some(map.next_value()?);
                     }
                     Field::Team => {
                         let team_raw: &str = map.next_value()?;
@@ -293,6 +304,12 @@ where
                     } else {
                         Ok(None)
                     }
+                }
+                CompetitionName::DogTags => {
+                    let score = score.ok_or_else(|| de::Error::missing_field("score"))?;
+                    let position = position.ok_or_else(|| de::Error::missing_field("position"))?;
+
+                    Ok(Some(Competition::DogTags { score, position }))
                 }
             }
         }

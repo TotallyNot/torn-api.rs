@@ -122,6 +122,8 @@ pub enum FactionSelection {
     Upgrades,
     Weapons,
     Lookup,
+    Caches,
+    CrimeExp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -171,6 +173,8 @@ pub enum TornSelection {
     Timestamp,
     Lookup,
     CityShops,
+    ItemDetails,
+    TerritoryNames,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
