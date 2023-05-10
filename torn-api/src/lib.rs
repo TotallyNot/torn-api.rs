@@ -22,7 +22,7 @@ pub mod awc;
 pub mod reqwest;
 
 #[cfg(feature = "__common")]
-mod common;
+pub mod common;
 
 mod de_util;
 
