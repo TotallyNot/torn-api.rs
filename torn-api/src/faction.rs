@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
 
-use chrono::{serde::ts_seconds, DateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use torn_api_macros::ApiCategory;
 
 use crate::de_util::{self, null_is_empty_dict};
 
-pub use crate::common::{LastAction, Status, Territory};
+pub use crate::common::{Attack, AttackFull, LastAction, Status, Territory};
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "faction")]
@@ -74,111 +74,6 @@ pub struct Basic<'a> {
 
     #[serde(borrow, deserialize_with = "de_util::empty_dict_is_empty_array")]
     pub territory_wars: Vec<FactionTerritoryWar<'a>>,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize)]
-pub enum AttackResult {
-    Attacked,
-    Mugged,
-    Hospitalized,
-    Lost,
-    Arrested,
-    Escape,
-    Interrupted,
-    Assist,
-    Timeout,
-    Stalemate,
-    Special,
-    Looted,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Attack<'a> {
-    pub code: &'a str,
-    #[serde(with = "ts_seconds")]
-    pub timestamp_started: DateTime<Utc>,
-    #[serde(with = "ts_seconds")]
-    pub timestamp_ended: DateTime<Utc>,
-
-    #[serde(deserialize_with = "de_util::empty_string_int_option")]
-    pub attacker_id: Option<i32>,
-    #[serde(deserialize_with = "de_util::empty_string_int_option")]
-    pub attacker_faction: Option<i32>,
-    pub defender_id: i32,
-    #[serde(deserialize_with = "de_util::empty_string_int_option")]
-    pub defender_faction: Option<i32>,
-    pub result: AttackResult,
-
-    #[serde(deserialize_with = "de_util::int_is_bool")]
-    pub stealthed: bool,
-
-    #[cfg(feature = "decimal")]
-    pub respect: rust_decimal::Decimal,
-
-    #[cfg(not(feature = "decimal"))]
-    pub respect: f32,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct RespectModifiers {
-    pub fair_fight: f32,
-    pub war: f32,
-    pub retaliation: f32,
-    pub group_attack: f32,
-    pub overseas: f32,
-    pub chain_bonus: f32,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AttackFull<'a> {
-    pub code: &'a str,
-    #[serde(with = "ts_seconds")]
-    pub timestamp_started: DateTime<Utc>,
-    #[serde(with = "ts_seconds")]
-    pub timestamp_ended: DateTime<Utc>,
-
-    #[serde(deserialize_with = "de_util::empty_string_int_option")]
-    pub attacker_id: Option<i32>,
-    #[serde(deserialize_with = "de_util::empty_string_is_none")]
-    pub attacker_name: Option<&'a str>,
-    #[serde(deserialize_with = "de_util::empty_string_int_option")]
-    pub attacker_faction: Option<i32>,
-    #[serde(
-        deserialize_with = "de_util::empty_string_is_none",
-        rename = "attacker_factionname"
-    )]
-    pub attacker_faction_name: Option<&'a str>,
-
-    pub defender_id: i32,
-    pub defender_name: &'a str,
-    #[serde(deserialize_with = "de_util::empty_string_int_option")]
-    pub defender_faction: Option<i32>,
-    #[serde(
-        deserialize_with = "de_util::empty_string_is_none",
-        rename = "defender_factionname"
-    )]
-    pub defender_faction_name: Option<&'a str>,
-
-    pub result: AttackResult,
-
-    #[serde(deserialize_with = "de_util::int_is_bool")]
-    pub stealthed: bool,
-    #[serde(deserialize_with = "de_util::int_is_bool")]
-    pub raid: bool,
-    #[serde(deserialize_with = "de_util::int_is_bool")]
-    pub ranked_war: bool,
-
-    #[cfg(feature = "decimal")]
-    pub respect: rust_decimal::Decimal,
-    #[cfg(feature = "decimal")]
-    pub respect_loss: rust_decimal::Decimal,
-
-    #[cfg(not(feature = "decimal"))]
-    pub respect: f32,
-    #[cfg(not(feature = "decimal"))]
-    pub respect_loss: f32,
-
-    pub modifiers: RespectModifiers,
 }
 
 #[cfg(test)]

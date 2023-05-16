@@ -2,12 +2,13 @@ use serde::{
     de::{self, MapAccess, Visitor},
     Deserialize, Deserializer,
 };
+use std::collections::BTreeMap;
 
 use torn_api_macros::ApiCategory;
 
 use crate::de_util;
 
-pub use crate::common::{LastAction, Status};
+pub use crate::common::{Attack, AttackFull, LastAction, Status};
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "user")]
@@ -22,6 +23,10 @@ pub enum Selection {
     PersonalStats,
     #[api(type = "CriminalRecord", field = "criminalrecord")]
     Crimes,
+    #[api(type = "BTreeMap<i32, Attack>", field = "attacks")]
+    AttacksFull,
+    #[api(type = "BTreeMap<i32, AttackFull>", field = "attacks")]
+    Attacks,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -404,6 +409,7 @@ mod tests {
                     Selection::Profile,
                     Selection::PersonalStats,
                     Selection::Crimes,
+                    Selection::Attacks,
                 ])
             })
             .await
@@ -414,6 +420,8 @@ mod tests {
         response.profile().unwrap();
         response.personal_stats().unwrap();
         response.crimes().unwrap();
+        response.attacks().unwrap();
+        response.attacks_full().unwrap();
     }
 
     #[async_test]
