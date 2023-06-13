@@ -29,8 +29,8 @@ where
     Response(ResponseError),
 }
 
-pub trait ApiKey: Sync + Send {
-    type IdType: PartialEq + Eq + std::hash::Hash + Send + Sync;
+pub trait ApiKey: Sync + Send + std::fmt::Debug + Clone {
+    type IdType: PartialEq + Eq + std::hash::Hash + Send + Sync + std::fmt::Debug + Clone;
 
     fn value(&self) -> &str;
 
@@ -66,7 +66,7 @@ where
             Self::Key(_) | Self::UserId(_) | Self::Id(_) => None,
             Self::Has(domain) => domain.fallback().map(Self::Has),
             Self::OneOf(domains) => {
-                let fallbacks: Vec<_> = domains.into_iter().filter_map(|d| d.fallback()).collect();
+                let fallbacks: Vec<_> = domains.iter().filter_map(|d| d.fallback()).collect();
                 if fallbacks.is_empty() {
                     None
                 } else {
@@ -176,7 +176,7 @@ where
 {
     storage: &'a S,
     comment: Option<&'a str>,
-    domain: S::Domain,
+    selector: KeySelector<S::Key, S::Domain>,
     _marker: std::marker::PhantomData<C>,
 }
 
@@ -184,10 +184,14 @@ impl<'a, C, S> KeyPoolExecutor<'a, C, S>
 where
     S: KeyPoolStorage,
 {
-    pub fn new(storage: &'a S, domain: S::Domain, comment: Option<&'a str>) -> Self {
+    pub fn new(
+        storage: &'a S,
+        selector: KeySelector<S::Key, S::Domain>,
+        comment: Option<&'a str>,
+    ) -> Self {
         Self {
             storage,
-            domain,
+            selector,
             comment,
             _marker: std::marker::PhantomData,
         }

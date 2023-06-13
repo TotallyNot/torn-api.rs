@@ -7,7 +7,7 @@ use torn_api::{
     ApiRequest, ApiResponse, ApiSelection, ResponseError,
 };
 
-use crate::{ApiKey, KeyPoolError, KeyPoolExecutor, KeyPoolStorage};
+use crate::{ApiKey, IntoSelector, KeyPoolError, KeyPoolExecutor, KeyPoolStorage};
 
 #[async_trait]
 impl<'client, C, S> RequestExecutor<C> for KeyPoolExecutor<'client, C, S>
@@ -30,7 +30,7 @@ where
         loop {
             let key = self
                 .storage
-                .acquire_key(self.domain.clone())
+                .acquire_key(self.selector.clone())
                 .await
                 .map_err(|e| KeyPoolError::Storage(Arc::new(e)))?;
             let url = request.url(key.value(), id.as_deref());
@@ -66,7 +66,7 @@ where
     {
         let keys = match self
             .storage
-            .acquire_many_keys(self.domain.clone(), ids.len() as i64)
+            .acquire_many_keys(self.selector.clone(), ids.len() as i64)
             .await
         {
             Ok(keys) => keys,
@@ -114,7 +114,7 @@ where
                         Ok(res) => return (id, Ok(res)),
                     };
 
-                    key = match self.storage.acquire_key(self.domain.clone()).await {
+                    key = match self.storage.acquire_key(self.selector.clone()).await {
                         Ok(k) => k,
                         Err(why) => return (id, Err(Self::Error::Storage(Arc::new(why)))),
                     };
@@ -150,25 +150,36 @@ where
         }
     }
 
-    pub fn torn_api(&self, domain: S::Domain) -> ApiProvider<C, KeyPoolExecutor<C, S>> {
+    pub fn torn_api<I>(&self, selector: I) -> ApiProvider<C, KeyPoolExecutor<C, S>>
+    where
+        I: IntoSelector<S::Key, S::Domain>,
+    {
         ApiProvider::new(
             &self.client,
-            KeyPoolExecutor::new(&self.storage, domain, self.comment.as_deref()),
+            KeyPoolExecutor::new(
+                &self.storage,
+                selector.into_selector(),
+                self.comment.as_deref(),
+            ),
         )
     }
 }
 
 pub trait WithStorage {
-    fn with_storage<'a, S>(
+    fn with_storage<'a, S, I>(
         &'a self,
         storage: &'a S,
-        domain: S::Domain,
+        selector: I,
     ) -> ApiProvider<Self, KeyPoolExecutor<Self, S>>
     where
         Self: ApiClient + Sized,
         S: KeyPoolStorage + Send + Sync + 'static,
+        I: IntoSelector<S::Key, S::Domain>,
     {
-        ApiProvider::new(self, KeyPoolExecutor::new(storage, domain, None))
+        ApiProvider::new(
+            self,
+            KeyPoolExecutor::new(storage, selector.into_selector(), None),
+        )
     }
 }
 
