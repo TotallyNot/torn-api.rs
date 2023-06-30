@@ -22,6 +22,12 @@ pub enum Selection {
 
     #[api(type = "HashMap<String, TerritoryWar>", field = "territorywars")]
     TerritoryWars,
+
+    #[api(type = "HashMap<String, Racket>", field = "rackets")]
+    Rackets,
+
+    #[api(type = "HashMap<String, Territory>", field = "territory")]
+    Territory,
 }
 
 #[derive(Deserialize)]
@@ -111,6 +117,31 @@ pub struct TerritoryWar {
     pub ends: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct Racket {
+    pub name: String,
+    pub level: i16,
+    pub reward: String,
+
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub created: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub changed: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Territory {
+    pub sector: i16,
+    pub size: i16,
+    pub slots: i16,
+    pub daily_respect: i16,
+    pub faction: i32,
+
+    pub neighbors: Vec<String>,
+    pub war: Option<TerritoryWar>,
+    pub racket: Option<Racket>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,11 +153,32 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .torn(|b| b.selections(&[Selection::Competition, Selection::TerritoryWars]))
+            .torn(|b| {
+                b.selections(&[
+                    Selection::Competition,
+                    Selection::TerritoryWars,
+                    Selection::Rackets,
+                ])
+            })
             .await
             .unwrap();
 
         response.competition().unwrap();
         response.territory_wars().unwrap();
+        response.rackets().unwrap();
+    }
+
+    #[async_test]
+    async fn territory() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .torn(|b| b.selections(&[Selection::Territory]).id("NSC"))
+            .await
+            .unwrap();
+
+        let territory = response.territory().unwrap();
+        assert!(territory.contains_key("NSC"));
     }
 }
