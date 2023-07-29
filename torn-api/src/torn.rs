@@ -43,6 +43,7 @@ pub struct EliminationLeaderboard {
 
 pub enum Competition {
     Elimination { teams: Vec<EliminationLeaderboard> },
+    Unkown(String),
 }
 
 fn decode_competition<'de, D>(deserializer: D) -> Result<Option<Competition>, D::Error>
@@ -98,7 +99,7 @@ where
                     teams: teams.ok_or_else(|| de::Error::missing_field("teams"))?,
                 })),
                 "" => Ok(None),
-                v => Err(de::Error::unknown_variant(v, &["Elimination", ""])),
+                v => Ok(Some(Competition::Unkown(v.to_owned()))),
             }
         }
     }
