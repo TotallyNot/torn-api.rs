@@ -2,12 +2,13 @@ use serde::{
     de::{self, MapAccess, Visitor},
     Deserialize, Deserializer,
 };
+use std::collections::BTreeMap;
 
 use torn_api_macros::ApiCategory;
 
 use crate::de_util;
 
-pub use crate::common::{LastAction, Status};
+pub use crate::common::{Attack, AttackFull, LastAction, Status};
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "user")]
@@ -22,6 +23,10 @@ pub enum Selection {
     PersonalStats,
     #[api(type = "CriminalRecord", field = "criminalrecord")]
     Crimes,
+    #[api(type = "BTreeMap<i32, Attack>", field = "attacks")]
+    AttacksFull,
+    #[api(type = "BTreeMap<i32, AttackFull>", field = "attacks")]
+    Attacks,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -168,9 +173,13 @@ pub enum EliminationTeam {
 #[derive(Debug, Clone)]
 pub enum Competition {
     Elimination {
-        score: i16,
+        score: i32,
         attacks: i16,
         team: EliminationTeam,
+    },
+    DogTags {
+        score: i32,
+        position: Option<i32>,
     },
     Unknown,
 }
@@ -187,6 +196,7 @@ where
         Team,
         Attacks,
         TeamName,
+        Position,
         #[serde(other)]
         Ignore,
     }
@@ -194,6 +204,8 @@ where
     #[derive(Deserialize)]
     enum CompetitionName {
         Elimination,
+        #[serde(rename = "Dog Tags")]
+        DogTags,
         #[serde(other)]
         Unknown,
     }
@@ -229,6 +241,7 @@ where
             let mut score = None;
             let mut attacks = None;
             let mut name = None;
+            let mut position = None;
 
             while let Some(key) = map.next_key()? {
                 match key {
@@ -240,6 +253,9 @@ where
                     }
                     Field::Attacks => {
                         attacks = Some(map.next_value()?);
+                    }
+                    Field::Position => {
+                        position = Some(map.next_value()?);
                     }
                     Field::Team => {
                         let team_raw: &str = map.next_value()?;
@@ -298,6 +314,12 @@ where
                     } else {
                         Ok(None)
                     }
+                }
+                CompetitionName::DogTags => {
+                    let score = score.ok_or_else(|| de::Error::missing_field("score"))?;
+                    let position = position.ok_or_else(|| de::Error::missing_field("position"))?;
+
+                    Ok(Some(Competition::DogTags { score, position }))
                 }
                 CompetitionName::Unknown => Ok(Some(Competition::Unknown)),
             }
@@ -416,6 +438,7 @@ mod tests {
                     Selection::Profile,
                     Selection::PersonalStats,
                     Selection::Crimes,
+                    Selection::Attacks,
                 ])
             })
             .await
@@ -426,6 +449,8 @@ mod tests {
         response.profile().unwrap();
         response.personal_stats().unwrap();
         response.crimes().unwrap();
+        response.attacks().unwrap();
+        response.attacks_full().unwrap();
     }
 
     #[async_test]
