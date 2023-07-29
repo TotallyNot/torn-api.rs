@@ -172,6 +172,7 @@ pub enum Competition {
         attacks: i16,
         team: EliminationTeam,
     },
+    Unknown,
 }
 
 fn deserialize_comp<'de, D>(deserializer: D) -> Result<Option<Competition>, D::Error>
@@ -186,11 +187,15 @@ where
         Team,
         Attacks,
         TeamName,
+        #[serde(other)]
+        Ignore,
     }
 
     #[derive(Deserialize)]
     enum CompetitionName {
         Elimination,
+        #[serde(other)]
+        Unknown,
     }
 
     struct CompetitionVisitor;
@@ -294,6 +299,7 @@ where
                         Ok(None)
                     }
                 }
+                CompetitionName::Unknown => Ok(Some(Competition::Unknown)),
             }
         }
     }
@@ -357,7 +363,7 @@ pub struct PersonalStats {
 }
 
 #[derive(Deserialize)]
-pub struct CriminalRecord {
+pub struct Crimes1 {
     pub selling_illegal_products: i32,
     pub theft: i32,
     pub auto_theft: i32,
@@ -367,6 +373,29 @@ pub struct CriminalRecord {
     pub fraud_crimes: i32,
     pub other: i32,
     pub total: i32,
+}
+
+#[derive(Deserialize)]
+pub struct Crimes2 {
+    pub vandalism: i32,
+    pub theft: i32,
+    pub counterfeiting: i32,
+    pub fraud: i32,
+    #[serde(rename = "illicitservices")]
+    pub illicit_services: i32,
+    #[serde(rename = "cybercrime")]
+    pub cyber_crime: i32,
+    pub extortion: i32,
+    #[serde(rename = "illegalproduction")]
+    pub illegal_production: i32,
+    pub total: i32,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum CriminalRecord {
+    Crimes1(Crimes1),
+    Crimes2(Crimes2),
 }
 
 #[cfg(test)]
