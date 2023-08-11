@@ -175,6 +175,8 @@ pub enum TornSelection {
     CityShops,
     ItemDetails,
     TerritoryNames,
+    TerritoryWarReport,
+    RaidReport,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
