@@ -5,12 +5,14 @@ use torn_api_macros::ApiCategory;
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "key")]
+#[non_exhaustive]
 pub enum Selection {
     #[api(type = "Info", flatten)]
     Info,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum AccessType {
     #[serde(rename = "Custom")]
     Custom,
@@ -30,12 +32,14 @@ pub enum AccessType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum KeySelection {
     Info,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum UserSelection {
     Ammo,
     Attacks,
@@ -83,10 +87,13 @@ pub enum UserSelection {
     WorkStats,
     Lookup,
     PublicStatus,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum FactionSelection {
     Applications,
     Armor,
@@ -124,10 +131,13 @@ pub enum FactionSelection {
     Lookup,
     Caches,
     CrimeExp,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum CompanySelection {
     Applications,
     Companies,
@@ -139,10 +149,13 @@ pub enum CompanySelection {
     Stock,
     Timestamp,
     Lookup,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum TornSelection {
     Bank,
     Cards,
@@ -177,24 +190,32 @@ pub enum TornSelection {
     TerritoryNames,
     TerritoryWarReport,
     RaidReport,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum MarketSelection {
     Bazaar,
     ItemMarket,
     PointsMarket,
     Timestamp,
     Lookup,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum PropertySelection {
     Property,
     Timestamp,
     Lookup,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

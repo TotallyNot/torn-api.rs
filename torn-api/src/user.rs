@@ -12,7 +12,8 @@ pub use crate::common::{Attack, AttackFull, LastAction, Status};
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "user")]
-pub enum Selection {
+#[non_exhaustive]
+pub enum UserSelection {
     #[api(type = "Basic", flatten)]
     Basic,
     #[api(type = "Profile", flatten)]
@@ -28,6 +29,8 @@ pub enum Selection {
     #[api(type = "BTreeMap<i32, AttackFull>", field = "attacks")]
     Attacks,
 }
+
+pub type Selection = UserSelection;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum Gender {

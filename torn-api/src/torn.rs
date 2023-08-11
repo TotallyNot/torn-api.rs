@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{
     de::{self, MapAccess, Visitor},
-    Deserialize,
+    Deserialize, Deserializer,
 };
 
 use torn_api_macros::ApiCategory;
@@ -12,7 +12,8 @@ use crate::user;
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "torn")]
-pub enum Selection {
+#[non_exhaustive]
+pub enum TornSelection {
     #[api(
         field = "competition",
         with = "decode_competition",
@@ -26,11 +27,20 @@ pub enum Selection {
     #[api(type = "HashMap<String, Racket>", field = "rackets")]
     Rackets,
 
-    #[api(type = "HashMap<String, Territory>", field = "territory")]
+    #[api(
+        type = "HashMap<String, Territory>",
+        with = "decode_territory",
+        field = "territory"
+    )]
     Territory,
+
+    #[api(type = "TerritoryWarReport", field = "territorywarreport")]
+    TerritoryWarReport,
 }
 
-#[derive(Deserialize)]
+pub type Selection = TornSelection;
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct EliminationLeaderboard {
     pub position: i16,
     pub team: user::EliminationTeam,
@@ -41,6 +51,7 @@ pub struct EliminationLeaderboard {
     pub losses: i32,
 }
 
+#[derive(Debug, Clone)]
 pub enum Competition {
     Elimination { teams: Vec<EliminationLeaderboard> },
     Unkown(String),
@@ -109,6 +120,7 @@ where
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TerritoryWar {
+    pub territory_war_id: i32,
     pub assaulting_faction: i32,
     pub defending_faction: i32,
 
@@ -143,6 +155,58 @@ pub struct Territory {
     pub racket: Option<Racket>,
 }
 
+fn decode_territory<'de, D>(deserializer: D) -> Result<HashMap<String, Territory>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Option::deserialize(deserializer)?.unwrap_or_default())
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct TerritoryWarReportTerritory {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TerritoryWarOutcome {
+    EndWithPeaceTreaty,
+    FailAssault,
+    SuccessAssault,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct TerritoryWarReportWar {
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub start: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub end: DateTime<Utc>,
+
+    pub result: TerritoryWarOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TerritoryWarReportRole {
+    Aggressor,
+    Defender,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TerritoryWarReportFaction {
+    pub name: String,
+    pub score: i32,
+    pub joins: i32,
+    pub clears: i32,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct TerritoryWarReport {
+    pub territory: TerritoryWarReportTerritory,
+    pub war: TerritoryWarReportWar,
+    pub factions: HashMap<i32, TerritoryWarReportFaction>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,9 +220,9 @@ mod tests {
             .torn_api(key)
             .torn(|b| {
                 b.selections(&[
-                    Selection::Competition,
-                    Selection::TerritoryWars,
-                    Selection::Rackets,
+                    TornSelection::Competition,
+                    TornSelection::TerritoryWars,
+                    TornSelection::Rackets,
                 ])
             })
             .await
@@ -181,5 +245,56 @@ mod tests {
 
         let territory = response.territory().unwrap();
         assert!(territory.contains_key("NSC"));
+    }
+
+    #[async_test]
+    async fn invalid_territory() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .torn(|b| b.selections(&[Selection::Territory]).id("AAA"))
+            .await
+            .unwrap();
+
+        assert!(response.territory().unwrap().is_empty());
+    }
+
+    #[async_test]
+    async fn territory_war_report() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(&key)
+            .torn(|b| b.selections(&[Selection::TerritoryWarReport]).id(37403))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.territory_war_report().unwrap().war.result,
+            TerritoryWarOutcome::SuccessAssault
+        );
+
+        let response = Client::default()
+            .torn_api(&key)
+            .torn(|b| b.selections(&[Selection::TerritoryWarReport]).id(37502))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.territory_war_report().unwrap().war.result,
+            TerritoryWarOutcome::FailAssault
+        );
+
+        let response = Client::default()
+            .torn_api(&key)
+            .torn(|b| b.selections(&[Selection::TerritoryWarReport]).id(37860))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.territory_war_report().unwrap().war.result,
+            TerritoryWarOutcome::EndWithPeaceTreaty
+        );
     }
 }
