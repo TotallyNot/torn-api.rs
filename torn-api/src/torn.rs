@@ -198,6 +198,8 @@ pub struct TerritoryWarReportFaction {
     pub score: i32,
     pub joins: i32,
     pub clears: i32,
+    #[serde(rename = "type")]
+    pub role: TerritoryWarReportRole,
 }
 
 #[derive(Clone, Debug, Deserialize)]
