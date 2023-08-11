@@ -44,6 +44,7 @@ pub struct Member<'a> {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct FactionTerritoryWar<'a> {
+    pub territory_war_id: i32,
     pub territory: &'a str,
     pub assaulting_faction: i32,
     pub defending_faction: i32,
