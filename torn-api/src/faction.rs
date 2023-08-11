@@ -11,7 +11,8 @@ pub use crate::common::{Attack, AttackFull, LastAction, Status, Territory};
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "faction")]
-pub enum Selection {
+#[non_exhaustive]
+pub enum FactionSelection {
     #[api(type = "Basic", flatten)]
     Basic,
 
@@ -28,6 +29,8 @@ pub enum Selection {
     )]
     Territory,
 }
+
+pub type Selection = FactionSelection;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Member<'a> {
