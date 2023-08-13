@@ -205,7 +205,7 @@ where
                 let mut tx = self.pool.begin().await?;
 
                 sqlx::query("set transaction isolation level repeatable read")
-                    .execute(&mut tx)
+                    .execute(&mut *tx)
                     .await?;
 
                 let mut qb = QueryBuilder::new(indoc::indoc! {
@@ -258,7 +258,7 @@ where
                         api_keys.domains"
                 });
 
-                let key = qb.build_query_as().fetch_optional(&mut tx).await?;
+                let key = qb.build_query_as().fetch_optional(&mut *tx).await?;
 
                 tx.commit().await?;
 
@@ -307,7 +307,7 @@ where
                 let mut tx = self.pool.begin().await?;
 
                 sqlx::query("set transaction isolation level repeatable read")
-                    .execute(&mut tx)
+                    .execute(&mut *tx)
                     .await?;
 
                 let mut qb = QueryBuilder::new(indoc::indoc! {
@@ -339,7 +339,7 @@ where
                 qb.push("\norder by uses limit ");
                 qb.push_bind(self.limit);
 
-                let mut keys: Vec<Self::Key> = qb.build_query_as().fetch_all(&mut tx).await?;
+                let mut keys: Vec<Self::Key> = qb.build_query_as().fetch_all(&mut *tx).await?;
 
                 if keys.is_empty() {
                     tx.commit().await?;
@@ -383,7 +383,7 @@ where
                 "#})
                 .bind(keys.iter().map(|k| k.id).collect::<Vec<_>>())
                 .bind(keys.iter().map(|k| k.uses).collect::<Vec<_>>())
-                .execute(&mut tx)
+                .execute(&mut *tx)
                 .await?;
 
                 tx.commit().await?;

@@ -1,6 +1,6 @@
 [package]
 name = "torn-key-pool"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 authors = ["Pyrit [2111649]"]
 license = "MIT"
@@ -21,7 +21,7 @@ torn-api = { path = "../torn-api", default-features = false, version = "0.5.10" 
 async-trait = "0.1"
 thiserror = "1"
 
-sqlx = { version = "0.6", features = [ "postgres", "chrono", "json" ], optional = true }
+sqlx = { version = "0.7", features = [ "postgres", "chrono", "json" ], optional = true }
 serde = { version = "1.0", optional = true }
 chrono = { version = "0.4", optional = true }
 indoc = { version = "1", optional = true }
@@ -35,7 +35,7 @@ awc = { version = "3", default-features = false, optional = true }
 
 [dev-dependencies]
 torn-api = { path = "../torn-api", features = [ "reqwest" ] }
-sqlx = { version = "0.6", features = [ "runtime-tokio-rustls" ] }
+sqlx = { version = "0.7", features = [ "runtime-tokio-rustls" ] }
 dotenv = "0.15.0"
 tokio = { version = "1.24.2", features = ["test-util", "rt", "macros"] }
 tokio-test = "0.4.2"
