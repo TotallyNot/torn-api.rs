@@ -4,9 +4,17 @@ use serde::Deserialize;
 use crate::de_util;
 
 #[derive(Debug, Clone, Deserialize)]
+pub enum OnlineStatus {
+    Online,
+    Offline,
+    Idle,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct LastAction {
     #[serde(with = "ts_seconds")]
     pub timestamp: DateTime<Utc>,
+    pub status: OnlineStatus,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

@@ -104,6 +104,23 @@ mod tests {
     }
 
     #[async_test]
+    async fn faction_public() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .faction(|b| {
+                b.id(7049)
+                    .selections(&[Selection::Basic, Selection::Territory])
+            })
+            .await
+            .unwrap();
+
+        response.basic().unwrap();
+        response.territory().unwrap();
+    }
+
+    #[async_test]
     async fn destroyed_faction() {
         let key = setup();
 
