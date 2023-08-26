@@ -2,7 +2,7 @@ use serde::{
     de::{self, MapAccess, Visitor},
     Deserialize, Deserializer,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use torn_api_macros::ApiCategory;
 
@@ -28,6 +28,8 @@ pub enum UserSelection {
     AttacksFull,
     #[api(type = "BTreeMap<i32, AttackFull>", field = "attacks")]
     Attacks,
+    #[api(type = "HashMap<Icon, &str>", field = "icons")]
+    Icons,
 }
 
 pub type Selection = UserSelection;
@@ -423,6 +425,70 @@ pub enum CriminalRecord {
     Crimes2(Crimes2),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Icon(i16);
+
+impl Icon {
+    pub const SUBSCRIBER: Self = Self(4);
+    pub const LEVEL_100: Self = Self(5);
+    pub const GENDER_MALE: Self = Self(6);
+    pub const GENDER_FEMALE: Self = Self(7);
+    pub const MARITAL_STATUS: Self = Self(8);
+    pub const FACTION_MEMBER: Self = Self(9);
+    pub const PLAYER_COMMITTEE: Self = Self(10);
+    pub const STAFF: Self = Self(11);
+
+    pub const COMPANY: Self = Self(27);
+    pub const BANK_INVESTMENT: Self = Self(29);
+    pub const PROPERTY_VAULT: Self = Self(32);
+    pub const DUKE_LOAN: Self = Self(33);
+
+    pub const DRUG_COOLDOWN: Self = Self(53);
+
+    pub const FEDDED: Self = Self(70);
+    pub const TRAVELLING: Self = Self(71);
+    pub const FACTION_LEADER: Self = Self(74);
+    pub const TERRITORY_WAR: Self = Self(75);
+
+    pub const FACTION_RECRUIT: Self = Self(81);
+    pub const STOCK_MARKET: Self = Self(84);
+}
+
+impl<'de> Deserialize<'de> for Icon {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct IconVisitor;
+
+        impl<'de> Visitor<'de> for IconVisitor {
+            type Value = Icon;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "struct Icon")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                if let Some(suffix) = v.strip_prefix("icon") {
+                    Ok(Icon(suffix.parse().map_err(|_e| {
+                        de::Error::invalid_value(de::Unexpected::Str(suffix), &"&str \"IconXX\"")
+                    })?))
+                } else {
+                    Err(de::Error::invalid_value(
+                        de::Unexpected::Str(v),
+                        &"&str \"iconXX\"",
+                    ))
+                }
+            }
+        }
+
+        deserializer.deserialize_str(IconVisitor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -497,5 +563,20 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.basic().unwrap().player_id, 2111649);
+    }
+
+    #[async_test]
+    async fn fedded() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .user(|b| b.id(1900654).selections(&[Selection::Icons]))
+            .await
+            .unwrap();
+
+        let icons = response.icons().unwrap();
+
+        assert!(icons.contains_key(&Icon::FEDDED))
     }
 }
