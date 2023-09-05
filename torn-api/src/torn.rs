@@ -46,9 +46,9 @@ pub struct EliminationLeaderboard {
     pub team: user::EliminationTeam,
     pub score: i16,
     pub lives: i16,
-    pub participants: i16,
-    pub wins: i32,
-    pub losses: i32,
+    pub participants: Option<i16>,
+    pub wins: Option<i32>,
+    pub losses: Option<i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -171,6 +171,7 @@ pub struct TerritoryWarReportTerritory {
 #[serde(rename_all = "snake_case")]
 pub enum TerritoryWarOutcome {
     EndWithPeaceTreaty,
+    EndWithDestroyDefense,
     FailAssault,
     SuccessAssault,
 }
@@ -297,6 +298,17 @@ mod tests {
         assert_eq!(
             response.territory_war_report().unwrap().war.result,
             TerritoryWarOutcome::EndWithPeaceTreaty
+        );
+
+        let response = Client::default()
+            .torn_api(&key)
+            .torn(|b| b.selections(&[Selection::TerritoryWarReport]).id(23757))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.territory_war_report().unwrap().war.result,
+            TerritoryWarOutcome::EndWithDestroyDefense
         );
     }
 }
