@@ -159,7 +159,7 @@ pub struct LifeBar {
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum EliminationTeam {
+pub enum EliminationTeam2022 {
     Firestarters,
     HardBoiled,
     QuackAddicts,
@@ -173,6 +173,19 @@ pub enum EliminationTeam {
     SatansSoldiers,
     WolfPack,
     Sleepyheads,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EliminationTeam {
+    Backstabbers,
+    Cheese,
+    DeathsDoor,
+    RegularHumanPeople,
+    FlowerRangers,
+    ReligiousExtremists,
+    Hivemind,
+    CapsLockCrew,
 }
 
 #[derive(Debug, Clone)]
@@ -268,35 +281,15 @@ where
                             None
                         } else {
                             Some(match team_raw {
-                                "firestarters" => EliminationTeam::Firestarters,
-                                "hard-boiled" => EliminationTeam::HardBoiled,
-                                "quack-addicts" => EliminationTeam::QuackAddicts,
-                                "rain-men" => EliminationTeam::RainMen,
-                                "totally-boned" => EliminationTeam::TotallyBoned,
-                                "rawring-thunder" => EliminationTeam::RawringThunder,
-                                "dirty-cops" => EliminationTeam::DirtyCops,
-                                "laughing-stock" => EliminationTeam::LaughingStock,
-                                "jean-therapy" => EliminationTeam::JeanTherapy,
-                                "satants-soldiers" => EliminationTeam::SatansSoldiers,
-                                "wolf-pack" => EliminationTeam::WolfPack,
-                                "sleepyheads" => EliminationTeam::Sleepyheads,
-                                _ => Err(de::Error::unknown_variant(
-                                    team_raw,
-                                    &[
-                                        "firestarters",
-                                        "hard-boiled",
-                                        "quack-addicts",
-                                        "rain-men",
-                                        "totally-boned",
-                                        "rawring-thunder",
-                                        "dirty-cops",
-                                        "laughing-stock",
-                                        "jean-therapy",
-                                        "satants-soldiers",
-                                        "wolf-pack",
-                                        "sleepyheads",
-                                    ],
-                                ))?,
+                                "backstabbers" => EliminationTeam::Backstabbers,
+                                "cheese" => EliminationTeam::Cheese,
+                                "deaths-door" => EliminationTeam::DeathsDoor,
+                                "regular-human-people" => EliminationTeam::RegularHumanPeople,
+                                "flower-rangers" => EliminationTeam::FlowerRangers,
+                                "religious-extremists" => EliminationTeam::ReligiousExtremists,
+                                "hivemind" => EliminationTeam::Hivemind,
+                                "caps-lock-crew" => EliminationTeam::CapsLockCrew,
+                                _ => Err(de::Error::unknown_variant(team_raw, &[]))?,
                             })
                         }
                     }
