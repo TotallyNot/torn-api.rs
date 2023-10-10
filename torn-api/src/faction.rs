@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
-use torn_api_macros::ApiCategory;
+use torn_api_macros::{ApiCategory, IntoOwned};
 
 use crate::de_util::{self, null_is_empty_dict};
 
@@ -32,7 +32,7 @@ pub enum FactionSelection {
 
 pub type Selection = FactionSelection;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, IntoOwned, Deserialize)]
 pub struct Member<'a> {
     pub name: &'a str,
     pub level: i16,
@@ -42,7 +42,7 @@ pub struct Member<'a> {
     pub last_action: LastAction,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, IntoOwned, Deserialize)]
 pub struct FactionTerritoryWar<'a> {
     pub territory_war_id: i32,
     pub territory: &'a str,
@@ -58,7 +58,7 @@ pub struct FactionTerritoryWar<'a> {
     pub end_time: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, IntoOwned, Deserialize)]
 pub struct Basic<'a> {
     #[serde(rename = "ID")]
     pub id: i32,

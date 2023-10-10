@@ -4,7 +4,7 @@ use serde::{
 };
 use std::collections::{BTreeMap, HashMap};
 
-use torn_api_macros::ApiCategory;
+use torn_api_macros::{ApiCategory, IntoOwned};
 
 use crate::de_util;
 
@@ -41,7 +41,7 @@ pub enum Gender {
     Enby,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, IntoOwned)]
 pub struct Faction<'a> {
     pub faction_id: i32,
     pub faction_name: &'a str,
@@ -133,7 +133,7 @@ where
     deserializer.deserialize_struct("Faction", FIELDS, FactionVisitor)
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, IntoOwned, Deserialize)]
 pub struct Basic<'a> {
     pub player_id: i32,
     pub name: &'a str,
@@ -142,7 +142,8 @@ pub struct Basic<'a> {
     pub status: Status<'a>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, IntoOwned, PartialEq, Eq, Deserialize)]
+#[into_owned(identity)]
 pub struct Discord {
     #[serde(rename = "userID")]
     pub user_id: i32,
@@ -188,7 +189,8 @@ pub enum EliminationTeam {
     CapsLockCrew,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IntoOwned)]
+#[into_owned(identity)]
 pub enum Competition {
     Elimination {
         score: i32,
@@ -327,7 +329,7 @@ where
     deserializer.deserialize_option(CompetitionVisitor)
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, IntoOwned, Deserialize)]
 pub struct Profile<'a> {
     pub player_id: i32,
     pub name: &'a str,
