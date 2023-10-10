@@ -25,13 +25,6 @@ struct ApiAttribute {
     with: Option<syn::Ident>,
 }
 
-fn get_lit_string(lit: syn::Lit) -> String {
-    match lit {
-        syn::Lit::Str(lit) => lit.value(),
-        _ => panic!("Expected api attribute to be a string"),
-    }
-}
-
 fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
 
@@ -41,23 +34,19 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
     };
 
     let mut category: Option<String> = None;
-    ast.attrs
-        .iter()
-        .filter(|a| a.path.is_ident("api"))
-        .for_each(|a| {
-            if let Ok(syn::Meta::List(l)) = a.parse_meta() {
-                for nested in l.nested {
-                    match nested {
-                        syn::NestedMeta::Meta(syn::Meta::NameValue(m))
-                            if m.path.is_ident("category") =>
-                        {
-                            category = Some(get_lit_string(m.lit))
-                        }
-                        _ => panic!("unknown api attribute"),
-                    }
+    for attr in &ast.attrs {
+        if attr.path().is_ident("api") {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("category") {
+                    let c: syn::LitStr = meta.value()?.parse()?;
+                    category = Some(c.value());
+                    Ok(())
+                } else {
+                    Err(meta.error("unknown attribute"))
                 }
-            }
-        });
+            }).unwrap();
+        }
+    }
 
     let category = category.expect("`category`");
 
@@ -65,76 +54,41 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
         .variants
         .iter()
         .filter_map(|variant| {
+            let mut r#type: Option<String> = None;
+            let mut field: Option<ApiField> = None;
+            let mut with: Option<proc_macro2::Ident> = None;
             for attr in &variant.attrs {
-                if attr.path.is_ident("api") {
-                    let meta = attr.parse_meta();
-                    match meta {
-                        Ok(syn::Meta::List(l)) => {
-                            let mut type_: Option<String> = None;
-                            let mut field: Option<ApiField> = None;
-                            let mut with: Option<String> = None;
-                            for nested in l.nested.into_iter() {
-                                match nested {
-                                    syn::NestedMeta::Meta(syn::Meta::NameValue(m))
-                                        if m.path.is_ident("type") =>
-                                    {
-                                        if type_.is_none() {
-                                            type_ = Some(get_lit_string(m.lit));
-                                        } else {
-                                            panic!("type can only be specified once");
-                                        }
-                                    }
-                                    syn::NestedMeta::Meta(syn::Meta::NameValue(m))
-                                        if m.path.is_ident("with") =>
-                                    {
-                                        if with.is_none() {
-                                            with = Some(get_lit_string(m.lit));
-                                        } else {
-                                            panic!("with can only be specified once");
-                                        }
-                                    }
-                                    syn::NestedMeta::Meta(syn::Meta::NameValue(m))
-                                        if m.path.is_ident("field") =>
-                                    {
-                                        if field.is_none() {
-                                            field = Some(ApiField::Property(quote::format_ident!(
-                                                "{}",
-                                                get_lit_string(m.lit)
-                                            )));
-                                        } else {
-                                            panic!("field/flatten can only be specified once");
-                                        }
-                                    }
-                                    syn::NestedMeta::Meta(syn::Meta::Path(m))
-                                        if m.is_ident("flatten") =>
-                                    {
-                                        if field.is_none() {
-                                            field = Some(ApiField::Flattened);
-                                        } else {
-                                            panic!("field/flatten can only be specified once");
-                                        }
-                                    }
-                                    _ => panic!("Couldn't parse api attribute"),
-                                }
-                            }
-                            let name =
-                                format_ident!("{}", variant.ident.to_string().to_case(Case::Snake));
-                            let raw_value = variant.ident.to_string().to_lowercase();
-
-                            return Some(ApiAttribute {
-                                field: field.expect("one of field/flatten"),
-                                name,
-                                raw_value,
-                                variant: variant.ident.clone(),
-                                type_name: type_
-                                    .expect("Need to specify type name")
-                                    .parse()
-                                    .expect("failed to parse type name"),
-                                with: with.map(|w| format_ident!("{}", w)),
-                            });
+                if attr.path().is_ident("api") {
+                    attr.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("type") {
+                            let t: syn::LitStr = meta.value()?.parse()?;
+                            r#type = Some(t.value());
+                            Ok(())
+                        } else if meta.path.is_ident("with") {
+                            let w: syn::LitStr = meta.value()?.parse()?;
+                            with = Some(quote::format_ident!("{}", w.value()));
+                            Ok(())
+                        } else if meta.path.is_ident("field") {
+                            let f: syn::LitStr = meta.value()?.parse()?;
+                            field = Some(ApiField::Property(quote::format_ident!("{}", f.value())));
+                            Ok(())
+                        } else if meta.path.is_ident("flatten") {
+                            field = Some(ApiField::Flattened);
+                            Ok(())
+                        } else {
+                            Err(meta.error("unsupported attribute"))
                         }
-                        _ => panic!("Couldn't parse api attribute"),
-                    }
+                    }).unwrap();
+                    let name = format_ident!("{}", variant.ident.to_string().to_case(Case::Snake));
+                    let raw_value = variant.ident.to_string().to_lowercase();
+                    return Some(ApiAttribute { 
+                        field: field.expect("field or flatten attribute must be specified"),
+                        raw_value,
+                        variant: variant.ident.clone(),
+                        type_name: r#type.expect("type must be specified").parse().unwrap(),
+                        name,
+                        with 
+                    })
                 }
             }
             None
@@ -208,6 +162,128 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
 
             fn category() -> &'static str {
                 #category
+            }
+        }
+    };
+
+    gen.into()
+}
+
+#[proc_macro_derive(IntoOwned, attributes(into_owned))]
+pub fn derive_into_owned(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+
+    impl_into_owned(&ast)
+}
+
+fn to_static_lt(ty: &mut syn::Type) -> bool {
+    let mut res = false;
+    match ty {
+        syn::Type::Path(path) => {
+            if let Some(syn::PathArguments::AngleBracketed(ab)) = path.path.segments.last_mut().map(|s| &mut s.arguments).as_mut() {
+                for mut arg in &mut ab.args {
+                    match &mut arg {
+                        syn::GenericArgument::Type(ty) => {
+                            if to_static_lt(ty) {
+                                res = true;
+                            }
+                        },
+                        syn::GenericArgument::Lifetime(lt) => {
+                            lt.ident = syn::Ident::new("static", proc_macro2::Span::call_site());
+                            res = true;
+                        }
+                        _ => ()
+                    }
+                }
+            }
+        }
+        syn::Type::Reference(r) => {
+            if let Some(lt) = r.lifetime.as_mut() {
+                lt.ident = syn::Ident::new("static", proc_macro2::Span::call_site());
+                res = true;
+            }
+            to_static_lt(&mut r.elem);
+        }
+        _ => ()
+    };
+    res
+}
+
+fn impl_into_owned(ast: &syn::DeriveInput) -> TokenStream {
+    let name = &ast.ident;
+    let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
+
+    let mut identity = false;
+    for attr in &ast.attrs {
+        if attr.path().is_ident("into_owned") {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("identity") {
+                    identity = true;
+                    Ok(())
+                } else {
+                    Err(meta.error("unknown attribute"))
+                }
+            }).unwrap();
+        }
+    }
+
+    if identity {
+        return quote! {
+            impl #impl_generics crate::into_owned::IntoOwned for #name #ty_generics #where_clause {
+                type Owned = Self;
+                fn into_owned(self) -> Self::Owned {
+                    self
+                }
+            }
+        }.into()
+    }
+
+    let syn::Data::Struct(r#struct) = &ast.data else {
+        panic!("Only stucts are supported");
+    };
+
+    let syn::Fields::Named(named_fields) = &r#struct.fields else {
+        panic!("Only named fields are supported");
+    };
+
+    let vis = &ast.vis;
+
+    for attr in &ast.attrs {
+        if attr.path().is_ident("identity") {
+            //
+        }
+    }
+
+    let mut owned_fields = Vec::with_capacity(named_fields.named.len());
+    let mut fields = Vec::with_capacity(named_fields.named.len());
+
+    for field in &named_fields.named {
+        let field_name = &field.ident.as_ref().unwrap();
+        let mut ty = field.ty.clone();
+        let vis = &field.vis;
+
+        if to_static_lt(&mut ty) {
+            owned_fields.push(quote! { #vis #field_name: <#ty as crate::into_owned::IntoOwned>::Owned });
+            fields.push(quote! { #field_name: crate::into_owned::IntoOwned::into_owned(self.#field_name) });
+        } else {
+            owned_fields.push(quote! { #vis #field_name: #ty });
+            fields.push(quote! { #field_name: self.#field_name });
+        };
+    }
+
+    let owned_name = syn::Ident::new(&format!("{}Owned", ast.ident), proc_macro2::Span::call_site());
+
+    let gen = quote! {
+        #[derive(Debug, Clone)]
+        #vis struct #owned_name {
+            #(#owned_fields,)*
+        }
+        impl #impl_generics crate::into_owned::IntoOwned for #name #ty_generics #where_clause {
+            type Owned = #owned_name;
+            fn into_owned(self) -> Self::Owned {
+                #owned_name {
+                    #(#fields,)*
+                }
             }
         }
     };

@@ -1,5 +1,6 @@
 #![warn(clippy::all, clippy::perf, clippy::style, clippy::suspicious)]
 
+pub mod into_owned;
 pub mod local;
 pub mod send;
 
@@ -31,6 +32,8 @@ use std::fmt::Write;
 use chrono::{DateTime, Utc};
 use serde::{de::Error as DeError, Deserialize};
 use thiserror::Error;
+
+pub use into_owned::IntoOwned;
 
 pub struct ApiResponse {
     pub value: serde_json::Value,
@@ -156,7 +159,7 @@ where
             from: None,
             to: None,
             comment: None,
-            phantom: std::marker::PhantomData::default(),
+            phantom: Default::default(),
         }
     }
 }

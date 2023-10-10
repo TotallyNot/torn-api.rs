@@ -1,5 +1,6 @@
 use chrono::{serde::ts_seconds, DateTime, Utc};
 use serde::Deserialize;
+use torn_api_macros::IntoOwned;
 
 use crate::de_util;
 
@@ -36,7 +37,7 @@ pub enum StateColour {
     Blue,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, IntoOwned, Deserialize)]
 pub struct Status<'a> {
     pub description: &'a str,
     #[serde(deserialize_with = "de_util::empty_string_is_none")]
