@@ -1,4 +1,4 @@
-use async_trait::async_trait;
+
 use indoc::indoc;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use thiserror::Error;

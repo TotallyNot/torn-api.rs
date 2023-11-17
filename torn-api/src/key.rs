@@ -247,7 +247,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .key(|b| b.selections(&[Selection::Info]))
+            .key(|b| b.selections([Selection::Info]))
             .await
             .unwrap();
 
