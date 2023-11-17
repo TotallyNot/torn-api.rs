@@ -145,8 +145,11 @@ pub struct Basic<'a> {
 #[derive(Debug, Clone, IntoOwned, PartialEq, Eq, Deserialize)]
 #[into_owned(identity)]
 pub struct Discord {
-    #[serde(rename = "userID")]
-    pub user_id: i32,
+    #[serde(
+        rename = "userID",
+        deserialize_with = "de_util::empty_string_int_option"
+    )]
+    pub user_id: Option<i32>,
     #[serde(rename = "discordID", deserialize_with = "de_util::string_is_long")]
     pub discord_id: Option<i64>,
 }
@@ -342,6 +345,7 @@ pub struct Profile<'a> {
     pub last_action: LastAction,
     #[serde(deserialize_with = "deserialize_faction")]
     pub faction: Option<Faction<'a>>,
+    pub job: EmploymentStatus,
     pub status: Status<'a>,
 
     #[serde(deserialize_with = "deserialize_comp")]
@@ -484,6 +488,104 @@ impl<'de> Deserialize<'de> for Icon {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[non_exhaustive]
+pub enum Job {
+    Director,
+    Employee,
+    Education,
+    Army,
+    Law,
+    Casino,
+    Medical,
+    Grocer,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Company {
+    PlayerRun {
+        name: String,
+        id: i32,
+        company_type: u8,
+    },
+    CityJob,
+}
+
+impl<'de> Deserialize<'de> for Company {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct CompanyVisitor;
+
+        impl<'de> Visitor<'de> for CompanyVisitor {
+            type Value = Company;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("enum Company")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                #[allow(clippy::enum_variant_names)]
+                #[derive(Deserialize)]
+                #[serde(rename_all = "snake_case")]
+                enum Field {
+                    CompanyId,
+                    CompanyName,
+                    CompanyType,
+                    #[serde(other)]
+                    Other,
+                }
+
+                let mut id = None;
+                let mut name = None;
+                let mut company_type = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::CompanyId => {
+                            id = Some(map.next_value()?);
+                            if id == Some(0) {
+                                return Ok(Company::CityJob);
+                            }
+                        }
+                        Field::CompanyType => company_type = Some(map.next_value()?),
+                        Field::CompanyName => {
+                            name = Some(map.next_value()?);
+                        }
+                        Field::Other => (),
+                    }
+                }
+
+                let id = id.ok_or_else(|| de::Error::missing_field("company_id"))?;
+                let name = name.ok_or_else(|| de::Error::missing_field("company_name"))?;
+                let company_type =
+                    company_type.ok_or_else(|| de::Error::missing_field("company_type"))?;
+
+                Ok(Company::PlayerRun {
+                    name,
+                    id,
+                    company_type,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(CompanyVisitor)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EmploymentStatus {
+    pub job: Job,
+    #[serde(flatten)]
+    pub company: Company,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -496,7 +598,7 @@ mod tests {
         let response = Client::default()
             .torn_api(key)
             .user(|b| {
-                b.selections(&[
+                b.selections([
                     Selection::Basic,
                     Selection::Discord,
                     Selection::Profile,
@@ -523,7 +625,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(|b| b.id(28).selections(&[Selection::Profile]))
+            .user(|b| b.id(28).selections([Selection::Profile]))
             .await
             .unwrap();
 
@@ -539,7 +641,7 @@ mod tests {
         let response = Client::default()
             .torn_api(key)
             .users([1, 2111649, 374272176892674048i64], |b| {
-                b.selections(&[Selection::Basic])
+                b.selections([Selection::Basic])
             })
             .await;
 
@@ -553,7 +655,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(|b| b.id(374272176892674048i64).selections(&[Selection::Basic]))
+            .user(|b| b.id(374272176892674048i64).selections([Selection::Basic]))
             .await
             .unwrap();
 
@@ -566,7 +668,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .user(|b| b.id(1900654).selections(&[Selection::Icons]))
+            .user(|b| b.id(1900654).selections([Selection::Icons]))
             .await
             .unwrap();
 

@@ -44,7 +44,8 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
                 } else {
                     Err(meta.error("unknown attribute"))
                 }
-            }).unwrap();
+            })
+            .unwrap();
         }
     }
 
@@ -78,17 +79,18 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
                         } else {
                             Err(meta.error("unsupported attribute"))
                         }
-                    }).unwrap();
+                    })
+                    .unwrap();
                     let name = format_ident!("{}", variant.ident.to_string().to_case(Case::Snake));
                     let raw_value = variant.ident.to_string().to_lowercase();
-                    return Some(ApiAttribute { 
+                    return Some(ApiAttribute {
                         field: field.expect("field or flatten attribute must be specified"),
                         raw_value,
                         variant: variant.ident.clone(),
                         type_name: r#type.expect("type must be specified").parse().unwrap(),
                         name,
-                        with 
-                    })
+                        with,
+                    });
                 }
             }
             None
@@ -154,7 +156,7 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
         }
 
         impl crate::ApiSelection for #name {
-            fn raw_value(&self) -> &'static str {
+            fn raw_value(self) -> &'static str {
                 match self {
                     #(#raw_values,)*
                 }
@@ -180,19 +182,25 @@ fn to_static_lt(ty: &mut syn::Type) -> bool {
     let mut res = false;
     match ty {
         syn::Type::Path(path) => {
-            if let Some(syn::PathArguments::AngleBracketed(ab)) = path.path.segments.last_mut().map(|s| &mut s.arguments).as_mut() {
+            if let Some(syn::PathArguments::AngleBracketed(ab)) = path
+                .path
+                .segments
+                .last_mut()
+                .map(|s| &mut s.arguments)
+                .as_mut()
+            {
                 for mut arg in &mut ab.args {
                     match &mut arg {
                         syn::GenericArgument::Type(ty) => {
                             if to_static_lt(ty) {
                                 res = true;
                             }
-                        },
+                        }
                         syn::GenericArgument::Lifetime(lt) => {
                             lt.ident = syn::Ident::new("static", proc_macro2::Span::call_site());
                             res = true;
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
             }
@@ -204,7 +212,7 @@ fn to_static_lt(ty: &mut syn::Type) -> bool {
             }
             to_static_lt(&mut r.elem);
         }
-        _ => ()
+        _ => (),
     };
     res
 }
@@ -223,7 +231,8 @@ fn impl_into_owned(ast: &syn::DeriveInput) -> TokenStream {
                 } else {
                     Err(meta.error("unknown attribute"))
                 }
-            }).unwrap();
+            })
+            .unwrap();
         }
     }
 
@@ -235,7 +244,8 @@ fn impl_into_owned(ast: &syn::DeriveInput) -> TokenStream {
                     self
                 }
             }
-        }.into()
+        }
+        .into();
     }
 
     let syn::Data::Struct(r#struct) = &ast.data else {
@@ -263,15 +273,21 @@ fn impl_into_owned(ast: &syn::DeriveInput) -> TokenStream {
         let vis = &field.vis;
 
         if to_static_lt(&mut ty) {
-            owned_fields.push(quote! { #vis #field_name: <#ty as crate::into_owned::IntoOwned>::Owned });
-            fields.push(quote! { #field_name: crate::into_owned::IntoOwned::into_owned(self.#field_name) });
+            owned_fields
+                .push(quote! { #vis #field_name: <#ty as crate::into_owned::IntoOwned>::Owned });
+            fields.push(
+                quote! { #field_name: crate::into_owned::IntoOwned::into_owned(self.#field_name) },
+            );
         } else {
             owned_fields.push(quote! { #vis #field_name: #ty });
             fields.push(quote! { #field_name: self.#field_name });
         };
     }
 
-    let owned_name = syn::Ident::new(&format!("{}Owned", ast.ident), proc_macro2::Span::call_site());
+    let owned_name = syn::Ident::new(
+        &format!("{}Owned", ast.ident),
+        proc_macro2::Span::call_site(),
+    );
 
     let gen = quote! {
         #[derive(Debug, Clone)]

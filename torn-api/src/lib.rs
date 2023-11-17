@@ -45,7 +45,16 @@ pub enum ResponseError {
     Api { code: u8, reason: String },
 
     #[error(transparent)]
-    Parsing(#[from] serde_json::Error),
+    MalformedResponse(#[from] serde_json::Error),
+}
+
+impl ResponseError {
+    pub fn api_code(&self) -> Option<u8> {
+        match self {
+            Self::Api { code, .. } => Some(*code),
+            _ => None,
+        }
+    }
 }
 
 impl ApiResponse {
@@ -100,7 +109,7 @@ impl ApiResponse {
 }
 
 pub trait ApiSelection: Send + Sync {
-    fn raw_value(&self) -> &'static str;
+    fn raw_value(self) -> &'static str;
 
     fn category() -> &'static str;
 }
@@ -135,6 +144,18 @@ where
 
     #[error(transparent)]
     Response(#[from] ResponseError),
+}
+
+impl<C> ApiClientError<C>
+where
+    C: std::error::Error,
+{
+    pub fn api_code(&self) -> Option<u8> {
+        match self {
+            Self::Response(err) => err.api_code(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -218,10 +239,13 @@ where
     A: ApiSelection,
 {
     #[must_use]
-    pub fn selections(mut self, selections: &[A]) -> Self {
-        self.request
-            .selections
-            .append(&mut selections.iter().map(ApiSelection::raw_value).collect());
+    pub fn selections(mut self, selections: impl IntoIterator<Item = A>) -> Self {
+        self.request.selections.append(
+            &mut selections
+                .into_iter()
+                .map(ApiSelection::raw_value)
+                .collect(),
+        );
         self
     }
 

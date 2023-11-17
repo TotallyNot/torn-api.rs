@@ -222,7 +222,7 @@ mod tests {
         let response = Client::default()
             .torn_api(key)
             .torn(|b| {
-                b.selections(&[
+                b.selections([
                     TornSelection::Competition,
                     TornSelection::TerritoryWars,
                     TornSelection::Rackets,
@@ -242,7 +242,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .torn(|b| b.selections(&[Selection::Territory]).id("NSC"))
+            .torn(|b| b.selections([Selection::Territory]).id("NSC"))
             .await
             .unwrap();
 
@@ -256,7 +256,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(key)
-            .torn(|b| b.selections(&[Selection::Territory]).id("AAA"))
+            .torn(|b| b.selections([Selection::Territory]).id("AAA"))
             .await
             .unwrap();
 
@@ -269,7 +269,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(&key)
-            .torn(|b| b.selections(&[Selection::TerritoryWarReport]).id(37403))
+            .torn(|b| b.selections([Selection::TerritoryWarReport]).id(37403))
             .await
             .unwrap();
 
@@ -280,7 +280,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(&key)
-            .torn(|b| b.selections(&[Selection::TerritoryWarReport]).id(37502))
+            .torn(|b| b.selections([Selection::TerritoryWarReport]).id(37502))
             .await
             .unwrap();
 
@@ -291,7 +291,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(&key)
-            .torn(|b| b.selections(&[Selection::TerritoryWarReport]).id(37860))
+            .torn(|b| b.selections([Selection::TerritoryWarReport]).id(37860))
             .await
             .unwrap();
 
@@ -302,7 +302,7 @@ mod tests {
 
         let response = Client::default()
             .torn_api(&key)
-            .torn(|b| b.selections(&[Selection::TerritoryWarReport]).id(23757))
+            .torn(|b| b.selections([Selection::TerritoryWarReport]).id(23757))
             .await
             .unwrap();
 
