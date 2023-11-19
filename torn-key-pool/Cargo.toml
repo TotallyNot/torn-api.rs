@@ -17,7 +17,7 @@ tokio-runtime = [ "dep:tokio", "dep:rand" ]
 actix-runtime = [ "dep:actix-rt", "dep:rand" ]
 
 [dependencies]
-torn-api = { path = "../torn-api", default-features = false, version = "0.5.10" }
+torn-api = { path = "../torn-api", default-features = false, version = "0.6" }
 async-trait = "0.1"
 thiserror = "1"
 

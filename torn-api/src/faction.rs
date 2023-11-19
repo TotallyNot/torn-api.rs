@@ -76,6 +76,9 @@ pub struct Basic<'a> {
     pub capacity: i16,
     pub best_chain: i32,
 
+    #[serde(deserialize_with = "de_util::empty_string_is_none")]
+    pub tag_image: Option<&'a str>,
+
     #[serde(borrow)]
     pub members: BTreeMap<i32, Member<'a>>,
 
