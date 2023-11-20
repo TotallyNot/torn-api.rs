@@ -29,6 +29,20 @@ where
     Response(ResponseError),
 }
 
+impl<S, C> KeyPoolError<S, C>
+where
+    S: std::error::Error,
+    C: std::error::Error,
+{
+    #[inline(always)]
+    pub fn api_code(&self) -> Option<u8> {
+        match self {
+            Self::Response(why) => why.api_code(),
+            _ => None,
+        }
+    }
+}
+
 pub trait ApiKey: Sync + Send + std::fmt::Debug + Clone {
     type IdType: PartialEq + Eq + std::hash::Hash + Send + Sync + std::fmt::Debug + Clone;
 
