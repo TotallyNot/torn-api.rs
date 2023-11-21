@@ -21,7 +21,11 @@ pub enum TornSelection {
     )]
     Competition,
 
-    #[api(type = "HashMap<String, TerritoryWar>", field = "territorywars")]
+    #[api(
+        type = "HashMap<String, TerritoryWar>",
+        with = "decode_territory_wars",
+        field = "territorywars"
+    )]
     TerritoryWars,
 
     #[api(type = "HashMap<String, Racket>", field = "rackets")]
@@ -55,6 +59,15 @@ pub struct EliminationLeaderboard {
 pub enum Competition {
     Elimination { teams: Vec<EliminationLeaderboard> },
     Unkown(String),
+}
+
+fn decode_territory_wars<'de, D>(deserializer: D) -> Result<HashMap<String, TerritoryWar>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let map: Option<_> = serde::Deserialize::deserialize(deserializer)?;
+
+    Ok(map.unwrap_or_default())
 }
 
 fn decode_competition<'de, D>(deserializer: D) -> Result<Option<Competition>, D::Error>
@@ -140,6 +153,9 @@ pub struct Racket {
     pub created: DateTime<Utc>,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub changed: DateTime<Utc>,
+
+    #[serde(rename = "faction")]
+    pub faction_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
