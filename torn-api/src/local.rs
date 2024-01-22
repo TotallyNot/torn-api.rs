@@ -106,6 +106,46 @@ where
             .collect()
     }
 
+    #[cfg(feature = "market")]
+    pub async fn market<F>(&self, build: F) -> Result<crate::market::Response, E::Error>
+    where
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::market::MarketSelection>,
+        ) -> crate::ApiRequestBuilder<crate::market::MarketSelection>,
+    {
+        let mut builder = crate::ApiRequestBuilder::default();
+        builder = build(builder);
+
+        self.executor
+            .execute(self.client, builder.request, builder.id)
+            .await
+            .map(crate::market::Response::from_response)
+    }
+
+    #[cfg(feature = "market")]
+    pub async fn markets<F, L, I>(
+        &self,
+        ids: L,
+        build: F,
+    ) -> HashMap<I, Result<crate::market::Response, E::Error>>
+    where
+        F: FnOnce(
+            crate::ApiRequestBuilder<crate::market::MarketSelection>,
+        ) -> crate::ApiRequestBuilder<crate::market::MarketSelection>,
+        I: ToString + std::hash::Hash + std::cmp::Eq,
+        L: IntoIterator<Item = I>,
+    {
+        let mut builder = crate::ApiRequestBuilder::default();
+        builder = build(builder);
+
+        self.executor
+            .execute_many(self.client, builder.request, Vec::from_iter(ids))
+            .await
+            .into_iter()
+            .map(|(k, v)| (k, v.map(crate::market::Response::from_response)))
+            .collect()
+    }
+
     #[cfg(feature = "torn")]
     pub async fn torn<F>(&self, build: F) -> Result<crate::torn::Response, E::Error>
     where

@@ -10,6 +10,9 @@ pub mod user;
 #[cfg(feature = "faction")]
 pub mod faction;
 
+#[cfg(feature = "market")]
+pub mod market;
+
 #[cfg(feature = "torn")]
 pub mod torn;
 

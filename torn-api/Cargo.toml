@@ -1,6 +1,6 @@
 [package]
 name = "torn-api"
-version = "0.6.2"
+version = "0.6.3"
 edition = "2021"
 authors = ["Pyrit [2111649]"]
 license = "MIT"
@@ -13,7 +13,7 @@ name = "deserialisation_benchmark"
 harness = false
 
 [features]
-default = [ "reqwest", "user", "faction", "torn", "key" ]
+default = [ "reqwest", "user", "faction", "torn", "key", "market" ]
 reqwest = [ "dep:reqwest" ]
 awc = [ "dep:awc" ]
 decimal = [ "dep:rust_decimal" ]
@@ -21,6 +21,7 @@ decimal = [ "dep:rust_decimal" ]
 user = [ "__common" ]
 faction = [ "__common" ]
 torn = [ "__common" ]
+market = [ "__common" ]
 key = []
 
 __common = []
