@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, Utc};
 use serde::{
@@ -8,7 +8,7 @@ use serde::{
 
 use torn_api_macros::ApiCategory;
 
-use crate::user;
+use crate::{de_util, user};
 
 #[derive(Debug, Clone, Copy, ApiCategory)]
 #[api(category = "torn")]
@@ -40,6 +40,9 @@ pub enum TornSelection {
 
     #[api(type = "TerritoryWarReport", field = "territorywarreport")]
     TerritoryWarReport,
+
+    #[api(type = "BTreeMap<i32, Item>", field = "items")]
+    Items,
 }
 
 pub type Selection = TornSelection;
@@ -226,6 +229,76 @@ pub struct TerritoryWarReport {
     pub factions: HashMap<i32, TerritoryWarReportFaction>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[non_exhaustive]
+pub enum ItemTypes {
+    Primary,
+    Secondary,
+    Melee,
+    Temporary,
+    Defensive,
+    Collectible,
+    Medical,
+    Drug,
+    Booster,
+    #[serde(rename = "Energy Drink")]
+    EnergyDrink,
+    Alcohol,
+    Book,
+    Candy,
+    Car,
+    Clothing,
+    Electronic,
+    Enhancer,
+    Flower,
+    Jewelry,
+    Other,
+    Special,
+    #[serde(rename = "Supply Pack")]
+    SupplyPack,
+    Virus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[non_exhaustive]
+//Missing hand to hand because it is not possible as a weapon
+pub enum WeaponTypes {
+    Slashing,
+    Rifle,
+    SMG,
+    Piercing,
+    Clubbing,
+    Pistol,
+    #[serde(rename = "Machine gun")]
+    MachineGun,
+    Mechanical,
+    Temporary,
+    Heavy,
+    Shotgun,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Item<'a> {
+    pub name: String,
+    pub description: String,
+    #[serde(deserialize_with = "de_util::empty_string_is_none")]
+    pub effect: Option<&'a str>,
+    #[serde(deserialize_with = "de_util::empty_string_is_none")]
+    pub requirement: Option<&'a str>,
+    #[serde(rename = "type")]
+    pub item_type: ItemTypes,
+    pub weapon_type: Option<WeaponTypes>,
+    #[serde(deserialize_with = "de_util::zero_is_none")]
+    pub buy_price: Option<u64>,
+    #[serde(deserialize_with = "de_util::zero_is_none")]
+    pub sell_price: Option<u64>,
+    #[serde(deserialize_with = "de_util::zero_is_none")]
+    pub market_value: Option<u64>,
+    #[serde(deserialize_with = "de_util::zero_is_none")]
+    pub circulation: Option<u32>,
+    pub image: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,5 +399,19 @@ mod tests {
             response.territory_war_report().unwrap().war.result,
             TerritoryWarOutcome::EndWithDestroyDefense
         );
+    }
+
+    #[async_test]
+    async fn item() {
+        let key = setup();
+
+        let response = Client::default()
+            .torn_api(key)
+            .torn(|b| b.selections([Selection::Items]).id(837))
+            .await
+            .unwrap();
+
+        let item_list = response.items().unwrap();
+        assert!(item_list.contains_key(&837));
     }
 }
