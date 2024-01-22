@@ -231,7 +231,7 @@ pub struct TerritoryWarReport {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[non_exhaustive]
-pub enum ItemTypes {
+pub enum ItemType {
     Primary,
     Secondary,
     Melee,
@@ -262,7 +262,7 @@ pub enum ItemTypes {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[non_exhaustive]
 //Missing hand to hand because it is not possible as a weapon
-pub enum WeaponTypes {
+pub enum WeaponType {
     Slashing,
     Rifle,
     SMG,
@@ -286,8 +286,8 @@ pub struct Item<'a> {
     #[serde(deserialize_with = "de_util::empty_string_is_none")]
     pub requirement: Option<&'a str>,
     #[serde(rename = "type")]
-    pub item_type: ItemTypes,
-    pub weapon_type: Option<WeaponTypes>,
+    pub item_type: ItemType,
+    pub weapon_type: Option<WeaponType>,
     #[serde(deserialize_with = "de_util::zero_is_none")]
     pub buy_price: Option<u64>,
     #[serde(deserialize_with = "de_util::zero_is_none")]
