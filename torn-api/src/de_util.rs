@@ -182,6 +182,22 @@ where
     deserializer.deserialize_any(ArrayVisitor(std::marker::PhantomData))
 }
 
+pub(crate) fn zero_is_none<'de, D, I>(deserializer: D) -> Result<Option<I>, D::Error>
+where
+    D: Deserializer<'de>,
+    I: TryFrom<i64>,
+{
+    let num = i64::deserialize(deserializer)?;
+
+    if num == 0 {
+        Ok(None)
+    } else {
+        Ok(Some(num.try_into().map_err(|_| {
+            D::Error::invalid_value(Unexpected::Signed(num), &std::any::type_name::<I>())
+        })?))
+    }
+}
+
 pub(crate) fn null_is_empty_dict<'de, D, K, V>(deserializer: D) -> Result<HashMap<K, V>, D::Error>
 where
     D: Deserializer<'de>,
