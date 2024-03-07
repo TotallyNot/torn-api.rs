@@ -2,7 +2,10 @@ use serde::{
     de::{self, MapAccess, Visitor},
     Deserialize, Deserializer,
 };
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    iter::zip,
+};
 
 use torn_api_macros::{ApiCategory, IntoOwned};
 
@@ -30,6 +33,10 @@ pub enum UserSelection {
     Attacks,
     #[api(type = "HashMap<Icon, &str>", field = "icons")]
     Icons,
+    #[api(type = "Awards<Medals>", flatten)]
+    Medals,
+    #[api(type = "Awards<Honors>", flatten)]
+    Honors,
 }
 
 pub type Selection = UserSelection;
@@ -586,6 +593,137 @@ pub struct EmploymentStatus {
     pub company: Company,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Award {
+    pub award_time: chrono::DateTime<chrono::Utc>,
+}
+
+pub trait AwardMarker {
+    fn award_key() -> &'static str;
+    fn time_key() -> &'static str;
+}
+
+#[derive(Debug, Clone)]
+pub struct Awards<T>
+where
+    T: AwardMarker,
+{
+    pub inner: BTreeMap<i32, Award>,
+    marker: std::marker::PhantomData<T>,
+}
+
+impl<T> std::ops::Deref for Awards<T>
+where
+    T: AwardMarker,
+{
+    type Target = BTreeMap<i32, Award>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> std::ops::DerefMut for Awards<T>
+where
+    T: AwardMarker,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<T> Awards<T>
+where
+    T: AwardMarker,
+{
+    pub fn into_inner(self) -> BTreeMap<i32, Award> {
+        self.inner
+    }
+}
+
+pub struct Medals;
+
+impl AwardMarker for Medals {
+    #[inline(always)]
+    fn award_key() -> &'static str {
+        "medals_awarded"
+    }
+    #[inline(always)]
+    fn time_key() -> &'static str {
+        "medals_time"
+    }
+}
+
+pub struct Honors;
+
+impl AwardMarker for Honors {
+    #[inline(always)]
+    fn award_key() -> &'static str {
+        "honors_awarded"
+    }
+    #[inline(always)]
+    fn time_key() -> &'static str {
+        "honors_time"
+    }
+}
+
+impl<'de, T> Deserialize<'de> for Awards<T>
+where
+    T: AwardMarker,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct AwardVisitor<T>(std::marker::PhantomData<T>)
+        where
+            T: AwardMarker;
+
+        impl<'de, T> Visitor<'de> for AwardVisitor<T>
+        where
+            T: AwardMarker,
+        {
+            type Value = Awards<T>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct awards")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut awards: Option<Vec<i32>> = None;
+                let mut times: Option<Vec<_>> = None;
+
+                while let Some(key) = map.next_key::<&'de str>()? {
+                    if key == T::award_key() {
+                        awards = map.next_value()?;
+                    } else if key == T::time_key() {
+                        times = map.next_value()?;
+                    }
+                }
+
+                let awards = awards.ok_or_else(|| de::Error::missing_field(T::award_key()))?;
+                let times = times.ok_or_else(|| de::Error::missing_field(T::time_key()))?;
+
+                Ok(Awards {
+                    inner: zip(
+                        awards,
+                        times.into_iter().map(|t| Award {
+                            award_time: chrono::DateTime::from_timestamp(t, 0).unwrap_or_default(),
+                        }),
+                    )
+                    .collect(),
+                    marker: Default::default(),
+                })
+            }
+        }
+
+        deserializer.deserialize_map(AwardVisitor(Default::default()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -605,6 +743,8 @@ mod tests {
                     Selection::PersonalStats,
                     Selection::Crimes,
                     Selection::Attacks,
+                    Selection::Medals,
+                    Selection::Honors,
                 ])
             })
             .await
@@ -617,6 +757,8 @@ mod tests {
         response.crimes().unwrap();
         response.attacks().unwrap();
         response.attacks_full().unwrap();
+        response.medals().unwrap();
+        response.honors().unwrap();
     }
 
     #[async_test]
