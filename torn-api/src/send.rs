@@ -11,9 +11,7 @@ where
     C: ApiClient,
     E: RequestExecutor<C>,
 {
-    #[allow(dead_code)]
     client: &'a C,
-    #[allow(dead_code)]
     executor: E,
 }
 
