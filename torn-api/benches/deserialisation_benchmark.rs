@@ -15,7 +15,7 @@ pub fn user_benchmark(c: &mut Criterion) {
         client
             .torn_api(key)
             .user(|b| {
-                b.selections(&[
+                b.selections([
                     user::Selection::Basic,
                     user::Selection::Discord,
                     user::Selection::Profile,
@@ -49,7 +49,7 @@ pub fn faction_benchmark(c: &mut Criterion) {
 
         client
             .torn_api(key)
-            .faction(|b| b.selections(&[faction::Selection::Basic]))
+            .faction(|b| b.selections([faction::Selection::Basic]))
             .await
             .unwrap()
     });
@@ -74,7 +74,7 @@ pub fn attacks_full(c: &mut Criterion) {
 
         client
             .torn_api(key)
-            .faction(|b| b.selections(&[faction::Selection::AttacksFull]))
+            .faction(|b| b.selections([faction::Selection::AttacksFull]))
             .await
             .unwrap()
     });
