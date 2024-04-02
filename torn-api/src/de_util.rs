@@ -39,9 +39,7 @@ where
     if i == 0 {
         Ok(None)
     } else {
-        let naive = NaiveDateTime::from_timestamp_opt(i, 0)
-            .ok_or_else(|| D::Error::invalid_value(Unexpected::Signed(i), &"Epoch timestamp"))?;
-        Ok(Some(DateTime::from_utc(naive, Utc)))
+        Ok(DateTime::from_timestamp(i, 0))
     }
 }
 

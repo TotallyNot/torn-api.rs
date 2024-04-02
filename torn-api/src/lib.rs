@@ -223,8 +223,8 @@ pub struct ApiRequestBuilder<A>
 where
     A: ApiSelection,
 {
-    request: ApiRequest<A>,
-    id: Option<String>,
+    pub request: ApiRequest<A>,
+    pub id: Option<String>,
 }
 
 impl<A> Default for ApiRequestBuilder<A>
