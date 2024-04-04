@@ -111,8 +111,12 @@ impl ApiResponse {
     }
 }
 
+pub trait ApiSelectionResponse: Send + Sync + From<ApiResponse> + 'static {
+    fn into_inner(self) -> ApiResponse;
+}
+
 pub trait ApiSelection: Send + Sync + 'static {
-    type Response: From<ApiResponse> + Send + Sync;
+    type Response: ApiSelectionResponse;
 
     fn raw_value(self) -> &'static str;
 
