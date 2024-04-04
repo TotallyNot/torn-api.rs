@@ -207,7 +207,7 @@ pub trait KeyPoolStorage {
 }
 
 #[derive(Debug, Default)]
-struct PoolOptions {
+pub struct PoolOptions {
     comment: Option<String>,
     hooks_before: std::collections::HashMap<std::any::TypeId, Box<dyn std::any::Any + Send + Sync>>,
     hooks_after: std::collections::HashMap<std::any::TypeId, Box<dyn std::any::Any + Send + Sync>>,
@@ -228,7 +228,7 @@ impl<'a, C, S> KeyPoolExecutor<'a, C, S>
 where
     S: KeyPoolStorage,
 {
-    fn new(
+    pub fn new(
         storage: &'a S,
         selector: KeySelector<S::Key, S::Domain>,
         options: Arc<PoolOptions>,
