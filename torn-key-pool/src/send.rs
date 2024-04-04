@@ -8,7 +8,8 @@ use torn_api::{
 };
 
 use crate::{
-    ApiKey, IntoSelector, KeyAction, KeyPoolError, KeyPoolExecutor, KeyPoolStorage, PoolOptions,
+    ApiKey, IntoSelector, KeyAction, KeyDomain, KeyPoolError, KeyPoolExecutor, KeyPoolStorage,
+    KeySelector, PoolOptions,
 };
 
 #[async_trait]
@@ -30,9 +31,11 @@ where
     {
         request.comment = self.options.comment.clone();
         if let Some(hook) = self.options.hooks_before.get(&std::any::TypeId::of::<A>()) {
-            let concrete = hook.downcast_ref::<BeforeHook<A>>().unwrap();
+            let concrete = hook
+                .downcast_ref::<BeforeHook<A, S::Key, S::Domain>>()
+                .unwrap();
 
-            (concrete.body)(&mut request);
+            (concrete.body)(&mut request, &self.selector);
         }
         loop {
             let key = self
@@ -58,9 +61,11 @@ where
                 Ok(res) => {
                     let res = res.into();
                     if let Some(hook) = self.options.hooks_after.get(&std::any::TypeId::of::<A>()) {
-                        let concrete = hook.downcast_ref::<AfterHook<A, S::Domain>>().unwrap();
+                        let concrete = hook
+                            .downcast_ref::<AfterHook<A, S::Key, S::Domain>>()
+                            .unwrap();
 
-                        match (concrete.body)(&res) {
+                        match (concrete.body)(&res, &self.selector) {
                             Err(KeyAction::Delete) => {
                                 self.storage
                                     .remove_key(key.selector())
@@ -156,20 +161,28 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-pub struct BeforeHook<A>
+pub struct BeforeHook<A, K, D>
 where
     A: ApiSelection,
+    K: ApiKey,
+    D: KeyDomain,
 {
-    body: Box<dyn Fn(&mut ApiRequest<A>) + Send + Sync + 'static>,
+    body: Box<dyn Fn(&mut ApiRequest<A>, &KeySelector<K, D>) + Send + Sync + 'static>,
 }
 
 #[allow(clippy::type_complexity)]
-pub struct AfterHook<A, D>
+pub struct AfterHook<A, K, D>
 where
     A: ApiSelection,
-    D: crate::KeyDomain,
+    K: ApiKey,
+    D: KeyDomain,
 {
-    body: Box<dyn Fn(&A::Response) -> Result<(), crate::KeyAction<D>> + Send + Sync + 'static>,
+    body: Box<
+        dyn Fn(&A::Response, &KeySelector<K, D>) -> Result<(), crate::KeyAction<D>>
+            + Send
+            + Sync
+            + 'static,
+    >,
 }
 
 pub struct PoolBuilder<C, S>
@@ -202,7 +215,7 @@ where
 
     pub fn hook_before<A>(
         mut self,
-        hook: impl Fn(&mut ApiRequest<A>) + Send + Sync + 'static,
+        hook: impl Fn(&mut ApiRequest<A>, &KeySelector<S::Key, S::Domain>) + Send + Sync + 'static,
     ) -> Self
     where
         A: ApiSelection + 'static,
@@ -218,14 +231,17 @@ where
 
     pub fn hook_after<A>(
         mut self,
-        hook: impl Fn(&A::Response) -> Result<(), KeyAction<S::Domain>> + Send + Sync + 'static,
+        hook: impl Fn(&A::Response, &KeySelector<S::Key, S::Domain>) -> Result<(), KeyAction<S::Domain>>
+            + Send
+            + Sync
+            + 'static,
     ) -> Self
     where
         A: ApiSelection + 'static,
     {
         self.options.hooks_after.insert(
             std::any::TypeId::of::<A>(),
-            Box::new(AfterHook::<A, S::Domain> {
+            Box::new(AfterHook::<A, S::Key, S::Domain> {
                 body: Box::new(hook),
             }),
         );
@@ -331,7 +347,7 @@ mod test {
         let (storage, _) = setup(pool).await;
 
         let pool = PoolBuilder::new(reqwest::Client::default(), storage)
-            .hook_before::<torn_api::user::UserSelection>(|req| {
+            .hook_before::<torn_api::user::UserSelection>(|req, _s| {
                 req.selections.push("crimes");
             })
             .build();
@@ -345,7 +361,7 @@ mod test {
         let (storage, _) = setup(pool).await;
 
         let pool = PoolBuilder::new(reqwest::Client::default(), storage)
-            .hook_after::<torn_api::user::UserSelection>(|_res| Err(KeyAction::Delete))
+            .hook_after::<torn_api::user::UserSelection>(|_res, _s| Err(KeyAction::Delete))
             .build();
 
         let key = pool.storage.read_key(KeySelector::Id(1)).await.unwrap();

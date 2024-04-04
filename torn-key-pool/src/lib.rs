@@ -43,7 +43,7 @@ where
     }
 }
 
-pub trait ApiKey: Sync + Send + std::fmt::Debug + Clone {
+pub trait ApiKey: Sync + Send + std::fmt::Debug + Clone + 'static {
     type IdType: PartialEq + Eq + std::hash::Hash + Send + Sync + std::fmt::Debug + Clone;
 
     fn value(&self) -> &str;
