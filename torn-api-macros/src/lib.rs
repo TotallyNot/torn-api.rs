@@ -141,7 +141,7 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
     );
 
     let gen = quote! {
-        pub struct Response(crate::ApiResponse);
+        pub struct Response(pub crate::ApiResponse);
 
         impl Response {
             #(#accessors)*
