@@ -111,16 +111,12 @@ impl ApiResponse {
     }
 }
 
-pub trait ApiSelection: Send + Sync {
+pub trait ApiSelection: Send + Sync + 'static {
+    type Response: From<ApiResponse> + Send + Sync;
+
     fn raw_value(self) -> &'static str;
 
     fn category() -> &'static str;
-}
-
-pub trait ApiCategoryResponse: Send + Sync {
-    type Selection: ApiSelection;
-
-    fn from_response(response: ApiResponse) -> Self;
 }
 
 pub struct DirectExecutor<C> {

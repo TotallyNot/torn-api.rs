@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use indoc::indoc;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
@@ -15,19 +17,28 @@ impl<T> PgKeyDomain for T where
 {
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum PgStorageError<D>
 where
     D: PgKeyDomain,
 {
     #[error(transparent)]
-    Pg(#[from] sqlx::Error),
+    Pg(Arc<sqlx::Error>),
 
     #[error("No key avalaible for domain {0:?}")]
     Unavailable(KeySelector<PgKey<D>, D>),
 
     #[error("Key not found: '{0:?}'")]
     KeyNotFound(KeySelector<PgKey<D>, D>),
+}
+
+impl<D> From<sqlx::Error> for PgStorageError<D>
+where
+    D: PgKeyDomain,
+{
+    fn from(value: sqlx::Error) -> Self {
+        Self::Pg(Arc::new(value))
+    }
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -53,9 +64,9 @@ fn build_predicate<'b, D>(
         KeySelector::Id(id) => builder.push("id=").push_bind(id),
         KeySelector::UserId(user_id) => builder.push("user_id=").push_bind(user_id),
         KeySelector::Key(key) => builder.push("key=").push_bind(key),
-        KeySelector::Has(domain) => builder
+        KeySelector::Has(domains) => builder
             .push("domains @> ")
-            .push_bind(sqlx::types::Json(vec![domain])),
+            .push_bind(sqlx::types::Json(domains)),
         KeySelector::OneOf(domains) => {
             if domains.is_empty() {
                 builder.push("false");
@@ -607,14 +618,11 @@ where
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::sync::{Arc, Once};
+    use std::sync::Arc;
 
     use sqlx::Row;
-    use tokio::test;
 
     use super::*;
-
-    static INIT: Once = Once::new();
 
     #[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(tag = "type", rename_all = "snake_case")]
@@ -634,15 +642,7 @@ pub(crate) mod test {
         }
     }
 
-    pub(crate) async fn setup() -> (PgKeyPoolStorage<Domain>, PgKey<Domain>) {
-        INIT.call_once(|| {
-            dotenv::dotenv().ok();
-        });
-
-        let pool = PgPool::connect(&std::env::var("DATABASE_URL").unwrap())
-            .await
-            .unwrap();
-
+    pub(crate) async fn setup(pool: PgPool) -> (PgKeyPoolStorage<Domain>, PgKey<Domain>) {
         sqlx::query("DROP TABLE IF EXISTS api_keys")
             .execute(&pool)
             .await
@@ -659,18 +659,18 @@ pub(crate) mod test {
         (storage, key)
     }
 
-    #[test]
-    async fn test_initialise() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn test_initialise(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         if let Err(e) = storage.initialise().await {
             panic!("Initialising key storage failed: {:?}", e);
         }
     }
 
-    #[test]
-    async fn test_store_duplicate_key() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_store_duplicate_key(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         let key = storage
             .store_key(1, key.key, vec![Domain::User { id: 1 }])
             .await
@@ -679,9 +679,9 @@ pub(crate) mod test {
         assert_eq!(key.domains.0.len(), 2);
     }
 
-    #[test]
-    async fn test_store_duplicate_key_duplicate_domain() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_store_duplicate_key_duplicate_domain(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         let key = storage
             .store_key(1, key.key, vec![Domain::All])
             .await
@@ -690,9 +690,9 @@ pub(crate) mod test {
         assert_eq!(key.domains.0.len(), 1);
     }
 
-    #[test]
-    async fn test_add_domain() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_add_domain(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         let key = storage
             .add_domain_to_key(KeySelector::Key(key.key), Domain::User { id: 12345 })
             .await
@@ -701,9 +701,9 @@ pub(crate) mod test {
         assert!(key.domains.0.contains(&Domain::User { id: 12345 }));
     }
 
-    #[test]
-    async fn test_add_domain_id() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_add_domain_id(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         let key = storage
             .add_domain_to_key(KeySelector::Id(key.id), Domain::User { id: 12345 })
             .await
@@ -712,9 +712,9 @@ pub(crate) mod test {
         assert!(key.domains.0.contains(&Domain::User { id: 12345 }));
     }
 
-    #[test]
-    async fn test_add_duplicate_domain() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_add_duplicate_domain(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         let key = storage
             .add_domain_to_key(KeySelector::Key(key.key), Domain::All)
             .await
@@ -729,9 +729,9 @@ pub(crate) mod test {
         );
     }
 
-    #[test]
-    async fn test_remove_domain() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_remove_domain(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         storage
             .add_domain_to_key(KeySelector::Key(key.key.clone()), Domain::User { id: 1 })
             .await
@@ -744,9 +744,9 @@ pub(crate) mod test {
         assert_eq!(key.domains.0, vec![Domain::All]);
     }
 
-    #[test]
-    async fn test_remove_domain_id() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_remove_domain_id(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         storage
             .add_domain_to_key(KeySelector::Id(key.id), Domain::User { id: 1 })
             .await
@@ -759,9 +759,9 @@ pub(crate) mod test {
         assert_eq!(key.domains.0, vec![Domain::All]);
     }
 
-    #[test]
-    async fn test_remove_last_domain() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_remove_last_domain(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         let key = storage
             .remove_domain_from_key(KeySelector::Key(key.key), Domain::All)
             .await
@@ -770,9 +770,9 @@ pub(crate) mod test {
         assert!(key.domains.0.is_empty());
     }
 
-    #[test]
-    async fn test_store_key() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn test_store_key(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
         let key = storage
             .store_key(1, "ABCDABCDABCDABCD".to_owned(), vec![])
             .await
@@ -780,26 +780,26 @@ pub(crate) mod test {
         assert_eq!(key.value(), "ABCDABCDABCDABCD");
     }
 
-    #[test]
-    async fn test_read_user_keys() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn test_read_user_keys(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         let keys = storage.read_keys(KeySelector::UserId(1)).await.unwrap();
         assert_eq!(keys.len(), 1);
     }
 
-    #[test]
-    async fn acquire_one() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn acquire_one(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         if let Err(e) = storage.acquire_key(Domain::All).await {
             panic!("Acquiring key failed: {:?}", e);
         }
     }
 
-    #[test]
-    async fn uses_spread() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn uses_spread(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
         storage
             .store_key(1, "ABC".to_owned(), vec![Domain::All])
             .await
@@ -816,33 +816,37 @@ pub(crate) mod test {
         }
     }
 
-    #[test]
-    async fn test_flag_key_one() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_flag_key_one(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
 
         assert!(storage.flag_key(key, 2).await.unwrap());
 
         match storage.acquire_key(Domain::All).await.unwrap_err() {
-            PgStorageError::Unavailable(d) => assert!(matches!(d, KeySelector::Has(Domain::All))),
+            PgStorageError::Unavailable(KeySelector::Has(domains)) => {
+                assert_eq!(domains, vec![Domain::All])
+            }
             why => panic!("Expected domain unavailable error but found '{why}'"),
         }
     }
 
-    #[test]
-    async fn test_flag_key_many() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn test_flag_key_many(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
 
         assert!(storage.flag_key(key, 2).await.unwrap());
 
         match storage.acquire_many_keys(Domain::All, 5).await.unwrap_err() {
-            PgStorageError::Unavailable(d) => assert!(matches!(d, KeySelector::Has(Domain::All))),
+            PgStorageError::Unavailable(KeySelector::Has(domains)) => {
+                assert_eq!(domains, vec![Domain::All])
+            }
             why => panic!("Expected domain unavailable error but found '{why}'"),
         }
     }
 
-    #[test]
-    async fn acquire_many() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn acquire_many(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         match storage.acquire_many_keys(Domain::All, 30).await {
             Err(e) => panic!("Acquiring key failed: {:?}", e),
@@ -851,9 +855,9 @@ pub(crate) mod test {
     }
 
     // HACK: this test is time sensitive and will fail if runs at the top of the minute
-    #[test]
-    async fn test_concurrent() {
-        let storage = Arc::new(setup().await.0);
+    #[sqlx::test]
+    async fn test_concurrent(pool: PgPool) {
+        let storage = Arc::new(setup(pool).await.0);
 
         for _ in 0..10 {
             let mut set = tokio::task::JoinSet::new();
@@ -884,9 +888,9 @@ pub(crate) mod test {
         }
     }
 
-    #[test]
-    async fn test_concurrent_spread() {
-        let storage = Arc::new(setup().await.0);
+    #[sqlx::test]
+    async fn test_concurrent_spread(pool: PgPool) {
+        let storage = Arc::new(setup(pool).await.0);
 
         for i in 0..24 {
             storage
@@ -923,10 +927,11 @@ pub(crate) mod test {
                 .unwrap();
         }
     }
+
     // HACK: this test is time sensitive and will fail if runs at the top of the minute
-    #[test]
-    async fn test_concurrent_many() {
-        let storage = Arc::new(setup().await.0);
+    #[sqlx::test]
+    async fn test_concurrent_many(pool: PgPool) {
+        let storage = Arc::new(setup(pool).await.0);
         for _ in 0..10 {
             let mut set = tokio::task::JoinSet::new();
 
@@ -956,73 +961,73 @@ pub(crate) mod test {
         }
     }
 
-    #[test]
-    async fn read_key() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn read_key(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
 
         let key = storage.read_key(KeySelector::Key(key.key)).await.unwrap();
         assert!(key.is_some());
     }
 
-    #[test]
-    async fn read_key_id() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn read_key_id(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
 
         let key = storage.read_key(KeySelector::Id(key.id)).await.unwrap();
         assert!(key.is_some());
     }
 
-    #[test]
-    async fn read_nonexistent_key() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn read_nonexistent_key(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         let key = storage.read_key(KeySelector::Id(-1)).await.unwrap();
         assert!(key.is_none());
     }
 
-    #[test]
-    async fn query_key() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn query_key(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         let key = storage.read_key(Domain::All).await.unwrap();
         assert!(key.is_some());
     }
 
-    #[test]
-    async fn query_nonexistent_key() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn query_nonexistent_key(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         let key = storage.read_key(Domain::Guild { id: 0 }).await.unwrap();
         assert!(key.is_none());
     }
 
-    #[test]
-    async fn query_all() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn query_all(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         let keys = storage.read_keys(Domain::All).await.unwrap();
         assert!(keys.len() == 1);
     }
 
-    #[test]
-    async fn query_by_id() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn query_by_id(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
         let key = storage.read_key(KeySelector::Id(1)).await.unwrap();
 
         assert!(key.is_some());
     }
 
-    #[test]
-    async fn query_by_key() {
-        let (storage, key) = setup().await;
+    #[sqlx::test]
+    async fn query_by_key(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
         let key = storage.read_key(KeySelector::Key(key.key)).await.unwrap();
 
         assert!(key.is_some());
     }
 
-    #[test]
-    async fn query_by_set() {
-        let (storage, _key) = setup().await;
+    #[sqlx::test]
+    async fn query_by_set(pool: PgPool) {
+        let (storage, _key) = setup(pool).await;
         let key = storage
             .read_key(KeySelector::OneOf(vec![
                 Domain::All,
@@ -1033,5 +1038,46 @@ pub(crate) mod test {
             .unwrap();
 
         assert!(key.is_some());
+    }
+
+    #[sqlx::test]
+    async fn all_selector(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
+
+        storage
+            .add_domain_to_key(key.selector(), Domain::Faction { id: 1 })
+            .await
+            .unwrap();
+
+        let key = storage
+            .read_key(KeySelector::Has(vec![
+                Domain::Faction { id: 1 },
+                Domain::All,
+            ]))
+            .await
+            .unwrap();
+
+        assert!(key.is_some());
+
+        let key = storage
+            .read_key(KeySelector::Has(vec![
+                Domain::All,
+                Domain::Faction { id: 1 },
+            ]))
+            .await
+            .unwrap();
+
+        assert!(key.is_some());
+
+        let key = storage
+            .read_key(KeySelector::Has(vec![
+                Domain::All,
+                Domain::Faction { id: 2 },
+                Domain::Faction { id: 1 },
+            ]))
+            .await
+            .unwrap();
+
+        assert!(key.is_none());
     }
 }

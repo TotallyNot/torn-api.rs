@@ -7,7 +7,9 @@ use torn_api::{
     ApiRequest, ApiResponse, ApiSelection, ResponseError,
 };
 
-use crate::{ApiKey, IntoSelector, KeyPoolError, KeyPoolExecutor, KeyPoolStorage};
+use crate::{
+    ApiKey, IntoSelector, KeyAction, KeyPoolError, KeyPoolExecutor, KeyPoolStorage, PoolOptions,
+};
 
 #[async_trait]
 impl<'client, C, S> RequestExecutor<C> for KeyPoolExecutor<'client, C, S>
@@ -22,17 +24,22 @@ where
         client: &C,
         mut request: ApiRequest<A>,
         id: Option<String>,
-    ) -> Result<ApiResponse, Self::Error>
+    ) -> Result<A::Response, Self::Error>
     where
         A: ApiSelection,
     {
-        request.comment = self.comment.map(ToOwned::to_owned);
+        request.comment = self.options.comment.clone();
+        if let Some(hook) = self.options.hooks_before.get(&std::any::TypeId::of::<A>()) {
+            let concrete = hook.downcast_ref::<BeforeHook<A>>().unwrap();
+
+            (concrete.body)(&mut request);
+        }
         loop {
             let key = self
                 .storage
                 .acquire_key(self.selector.clone())
                 .await
-                .map_err(|e| KeyPoolError::Storage(Arc::new(e)))?;
+                .map_err(KeyPoolError::Storage)?;
             let url = request.url(key.value(), id.as_deref());
             let value = client.request(url).await?;
 
@@ -42,14 +49,37 @@ where
                         .storage
                         .flag_key(key, code)
                         .await
-                        .map_err(Arc::new)
                         .map_err(KeyPoolError::Storage)?
                     {
                         return Err(KeyPoolError::Response(ResponseError::Api { code, reason }));
                     }
                 }
                 Err(parsing_error) => return Err(KeyPoolError::Response(parsing_error)),
-                Ok(res) => return Ok(res),
+                Ok(res) => {
+                    let res = res.into();
+                    if let Some(hook) = self.options.hooks_after.get(&std::any::TypeId::of::<A>()) {
+                        let concrete = hook.downcast_ref::<AfterHook<A, S::Domain>>().unwrap();
+
+                        match (concrete.body)(&res) {
+                            Err(KeyAction::Delete) => {
+                                self.storage
+                                    .remove_key(key.selector())
+                                    .await
+                                    .map_err(KeyPoolError::Storage)?;
+                                continue;
+                            }
+                            Err(KeyAction::RemoveDomain(domain)) => {
+                                self.storage
+                                    .remove_domain_from_key(key.selector(), domain)
+                                    .await
+                                    .map_err(KeyPoolError::Storage)?;
+                                continue;
+                            }
+                            _ => (),
+                        };
+                    }
+                    return Ok(res);
+                }
             };
         }
     }
@@ -59,7 +89,7 @@ where
         client: &C,
         mut request: ApiRequest<A>,
         ids: Vec<I>,
-    ) -> HashMap<I, Result<ApiResponse, Self::Error>>
+    ) -> HashMap<I, Result<A::Response, Self::Error>>
     where
         A: ApiSelection,
         I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync,
@@ -71,15 +101,14 @@ where
         {
             Ok(keys) => keys,
             Err(why) => {
-                let shared = Arc::new(why);
                 return ids
                     .into_iter()
-                    .map(|i| (i, Err(Self::Error::Storage(shared.clone()))))
+                    .map(|i| (i, Err(Self::Error::Storage(why.clone()))))
                     .collect();
             }
         };
 
-        request.comment = self.comment.map(ToOwned::to_owned);
+        request.comment = self.options.comment.clone();
         let request_ref = &request;
 
         let tuples =
@@ -105,24 +134,110 @@ where
                                     )
                                 }
                                 Ok(true) => (),
-                                Err(why) => return (id, Err(KeyPoolError::Storage(Arc::new(why)))),
+                                Err(why) => return (id, Err(KeyPoolError::Storage(why))),
                             }
                         }
                         Err(parsing_error) => {
                             return (id, Err(KeyPoolError::Response(parsing_error)))
                         }
-                        Ok(res) => return (id, Ok(res)),
+                        Ok(res) => return (id, Ok(res.into())),
                     };
 
                     key = match self.storage.acquire_key(self.selector.clone()).await {
                         Ok(k) => k,
-                        Err(why) => return (id, Err(Self::Error::Storage(Arc::new(why)))),
+                        Err(why) => return (id, Err(Self::Error::Storage(why))),
                     };
                 }
             }))
             .await;
 
         HashMap::from_iter(tuples)
+    }
+}
+
+#[allow(clippy::type_complexity)]
+pub struct BeforeHook<A>
+where
+    A: ApiSelection,
+{
+    body: Box<dyn Fn(&mut ApiRequest<A>) + Send + Sync + 'static>,
+}
+
+#[allow(clippy::type_complexity)]
+pub struct AfterHook<A, D>
+where
+    A: ApiSelection,
+    D: crate::KeyDomain,
+{
+    body: Box<dyn Fn(&A::Response) -> Result<(), crate::KeyAction<D>> + Send + Sync + 'static>,
+}
+
+pub struct PoolBuilder<C, S>
+where
+    C: ApiClient,
+    S: KeyPoolStorage,
+{
+    client: C,
+    storage: S,
+    options: crate::PoolOptions,
+}
+
+impl<C, S> PoolBuilder<C, S>
+where
+    C: ApiClient,
+    S: KeyPoolStorage,
+{
+    pub fn new(client: C, storage: S) -> Self {
+        Self {
+            client,
+            storage,
+            options: Default::default(),
+        }
+    }
+
+    pub fn comment(mut self, c: impl ToString) -> Self {
+        self.options.comment = Some(c.to_string());
+        self
+    }
+
+    pub fn hook_before<A>(
+        mut self,
+        hook: impl Fn(&mut ApiRequest<A>) + Send + Sync + 'static,
+    ) -> Self
+    where
+        A: ApiSelection + 'static,
+    {
+        self.options.hooks_before.insert(
+            std::any::TypeId::of::<A>(),
+            Box::new(BeforeHook {
+                body: Box::new(hook),
+            }),
+        );
+        self
+    }
+
+    pub fn hook_after<A>(
+        mut self,
+        hook: impl Fn(&A::Response) -> Result<(), KeyAction<S::Domain>> + Send + Sync + 'static,
+    ) -> Self
+    where
+        A: ApiSelection + 'static,
+    {
+        self.options.hooks_after.insert(
+            std::any::TypeId::of::<A>(),
+            Box::new(AfterHook::<A, S::Domain> {
+                body: Box::new(hook),
+            }),
+        );
+        self
+    }
+
+    pub fn build(self) -> KeyPool<C, S> {
+        KeyPool {
+            client: self.client,
+            storage: self.storage,
+            options: Arc::new(self.options),
+        }
     }
 }
 
@@ -134,7 +249,7 @@ where
 {
     client: C,
     pub storage: S,
-    comment: Option<String>,
+    options: Arc<PoolOptions>,
 }
 
 impl<C, S> KeyPool<C, S>
@@ -142,14 +257,6 @@ where
     C: ApiClient,
     S: KeyPoolStorage + Send + Sync + 'static,
 {
-    pub fn new(client: C, storage: S, comment: Option<String>) -> Self {
-        Self {
-            client,
-            storage,
-            comment,
-        }
-    }
-
     pub fn torn_api<I>(&self, selector: I) -> ApiProvider<C, KeyPoolExecutor<C, S>>
     where
         I: IntoSelector<S::Key, S::Domain>,
@@ -159,7 +266,7 @@ where
             KeyPoolExecutor::new(
                 &self.storage,
                 selector.into_selector(),
-                self.comment.as_deref(),
+                self.options.clone(),
             ),
         )
     }
@@ -178,7 +285,7 @@ pub trait WithStorage {
     {
         ApiProvider::new(
             self,
-            KeyPoolExecutor::new(storage, selector.into_selector(), None),
+            KeyPoolExecutor::new(storage, selector.into_selector(), Default::default()),
         )
     }
 }
@@ -188,27 +295,28 @@ impl WithStorage for reqwest::Client {}
 
 #[cfg(all(test, feature = "postgres", feature = "reqwest"))]
 mod test {
-    use tokio::test;
+    use sqlx::PgPool;
 
     use super::*;
-    use crate::postgres::test::{setup, Domain};
+    use crate::{
+        postgres::test::{setup, Domain},
+        KeySelector,
+    };
 
-    #[test]
-    async fn test_pool_request() {
-        let (storage, _) = setup().await;
-        let pool = KeyPool::new(
-            reqwest::Client::default(),
-            storage,
-            Some("api.rs".to_owned()),
-        );
+    #[sqlx::test]
+    async fn test_pool_request(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
+        let pool = PoolBuilder::new(reqwest::Client::default(), storage)
+            .comment("api.rs")
+            .build();
 
         let response = pool.torn_api(Domain::All).user(|b| b).await.unwrap();
         _ = response.profile().unwrap();
     }
 
-    #[test]
-    async fn test_with_storage_request() {
-        let (storage, _) = setup().await;
+    #[sqlx::test]
+    async fn test_with_storage_request(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
 
         let response = reqwest::Client::new()
             .with_storage(&storage, Domain::All)
@@ -216,5 +324,37 @@ mod test {
             .await
             .unwrap();
         _ = response.profile().unwrap();
+    }
+
+    #[sqlx::test]
+    async fn before_hook(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
+
+        let pool = PoolBuilder::new(reqwest::Client::default(), storage)
+            .hook_before::<torn_api::user::UserSelection>(|req| {
+                req.selections.push("crimes");
+            })
+            .build();
+
+        let response = pool.torn_api(Domain::All).user(|b| b).await.unwrap();
+        _ = response.crimes().unwrap();
+    }
+
+    #[sqlx::test]
+    async fn after_hook(pool: PgPool) {
+        let (storage, _) = setup(pool).await;
+
+        let pool = PoolBuilder::new(reqwest::Client::default(), storage)
+            .hook_after::<torn_api::user::UserSelection>(|_res| Err(KeyAction::Delete))
+            .build();
+
+        let key = pool.storage.read_key(KeySelector::Id(1)).await.unwrap();
+        assert!(key.is_some());
+
+        let response = pool.torn_api(Domain::All).user(|b| b).await;
+        assert!(matches!(response, Err(KeyPoolError::Storage(_))));
+
+        let key = pool.storage.read_key(KeySelector::Id(1)).await.unwrap();
+        assert!(key.is_none());
     }
 }

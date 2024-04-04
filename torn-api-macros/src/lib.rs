@@ -147,15 +147,15 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
             #(#accessors)*
         }
 
-        impl crate::ApiCategoryResponse for Response {
-            type Selection = #name;
-
-            fn from_response(response: crate::ApiResponse) -> Self {
-                Self(response)
+        impl From<crate::ApiResponse> for Response {
+            fn from(value: crate::ApiResponse) -> Self {
+                Self(value)
             }
         }
 
         impl crate::ApiSelection for #name {
+            type Response = Response;
+
             fn raw_value(self) -> &'static str {
                 match self {
                     #(#raw_values,)*
