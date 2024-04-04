@@ -153,6 +153,12 @@ fn impl_api_category(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
 
+        impl crate::ApiSelectionResponse for Response {
+            fn into_inner(self) -> crate::ApiResponse {
+                self.0
+            }
+        }
+
         impl crate::ApiSelection for #name {
             type Response = Response;
 
