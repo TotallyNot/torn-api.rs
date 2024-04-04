@@ -3,7 +3,7 @@
 #[cfg(feature = "postgres")]
 pub mod postgres;
 
-pub mod local;
+// pub mod local;
 pub mod send;
 
 use std::sync::Arc;
@@ -16,11 +16,11 @@ use torn_api::ResponseError;
 #[derive(Debug, Error)]
 pub enum KeyPoolError<S, C>
 where
-    S: std::error::Error,
+    S: std::error::Error + Clone,
     C: std::error::Error,
 {
     #[error("Key pool storage driver error: {0:?}")]
-    Storage(#[source] Arc<S>),
+    Storage(#[source] S),
 
     #[error(transparent)]
     Client(#[from] C),
@@ -31,7 +31,7 @@ where
 
 impl<S, C> KeyPoolError<S, C>
 where
-    S: std::error::Error,
+    S: std::error::Error + Clone,
     C: std::error::Error,
 {
     #[inline(always)]
@@ -49,9 +49,16 @@ pub trait ApiKey: Sync + Send + std::fmt::Debug + Clone {
     fn value(&self) -> &str;
 
     fn id(&self) -> Self::IdType;
+
+    fn selector<D>(&self) -> KeySelector<Self, D>
+    where
+        D: KeyDomain,
+    {
+        KeySelector::Id(self.id())
+    }
 }
 
-pub trait KeyDomain: Clone + std::fmt::Debug + Send + Sync {
+pub trait KeyDomain: Clone + std::fmt::Debug + Send + Sync + 'static {
     fn fallback(&self) -> Option<Self> {
         None
     }
@@ -66,7 +73,7 @@ where
     Key(String),
     Id(K::IdType),
     UserId(i32),
-    Has(D),
+    Has(Vec<D>),
     OneOf(Vec<D>),
 }
 
@@ -78,7 +85,14 @@ where
     pub(crate) fn fallback(&self) -> Option<Self> {
         match self {
             Self::Key(_) | Self::UserId(_) | Self::Id(_) => None,
-            Self::Has(domain) => domain.fallback().map(Self::Has),
+            Self::Has(domains) => {
+                let fallbacks: Vec<_> = domains.iter().filter_map(|d| d.fallback()).collect();
+                if fallbacks.is_empty() {
+                    None
+                } else {
+                    Some(Self::Has(fallbacks))
+                }
+            }
             Self::OneOf(domains) => {
                 let fallbacks: Vec<_> = domains.iter().filter_map(|d| d.fallback()).collect();
                 if fallbacks.is_empty() {
@@ -105,7 +119,7 @@ where
     D: KeyDomain,
 {
     fn into_selector(self) -> KeySelector<K, D> {
-        KeySelector::Has(self)
+        KeySelector::Has(vec![self])
     }
 }
 
@@ -119,11 +133,20 @@ where
     }
 }
 
+pub enum KeyAction<D>
+where
+    D: KeyDomain,
+{
+    Delete,
+    RemoveDomain(D),
+    Timeout(chrono::Duration),
+}
+
 #[async_trait]
 pub trait KeyPoolStorage {
     type Key: ApiKey;
     type Domain: KeyDomain;
-    type Error: std::error::Error + Sync + Send;
+    type Error: std::error::Error + Sync + Send + Clone;
 
     async fn acquire_key<S>(&self, selector: S) -> Result<Self::Key, Self::Error>
     where
@@ -183,13 +206,20 @@ pub trait KeyPoolStorage {
         S: IntoSelector<Self::Key, Self::Domain>;
 }
 
+#[derive(Debug, Default)]
+struct PoolOptions {
+    comment: Option<String>,
+    hooks_before: std::collections::HashMap<std::any::TypeId, Box<dyn std::any::Any + Send + Sync>>,
+    hooks_after: std::collections::HashMap<std::any::TypeId, Box<dyn std::any::Any + Send + Sync>>,
+}
+
 #[derive(Debug, Clone)]
 pub struct KeyPoolExecutor<'a, C, S>
 where
     S: KeyPoolStorage,
 {
     storage: &'a S,
-    comment: Option<&'a str>,
+    options: Arc<PoolOptions>,
     selector: KeySelector<S::Key, S::Domain>,
     _marker: std::marker::PhantomData<C>,
 }
@@ -198,15 +228,15 @@ impl<'a, C, S> KeyPoolExecutor<'a, C, S>
 where
     S: KeyPoolStorage,
 {
-    pub fn new(
+    fn new(
         storage: &'a S,
         selector: KeySelector<S::Key, S::Domain>,
-        comment: Option<&'a str>,
+        options: Arc<PoolOptions>,
     ) -> Self {
         Self {
             storage,
             selector,
-            comment,
+            options,
             _marker: std::marker::PhantomData,
         }
     }

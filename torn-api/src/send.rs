@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 
-use crate::{
-    ApiCategoryResponse, ApiClientError, ApiRequest, ApiResponse, ApiSelection, DirectExecutor,
-};
+use crate::{ApiClientError, ApiRequest, ApiResponse, ApiSelection, DirectExecutor};
 
 pub struct ApiProvider<'a, C, E>
 where
@@ -37,7 +35,6 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
-            .map(crate::user::Response::from_response)
     }
 
     #[cfg(feature = "user")]
@@ -59,9 +56,6 @@ where
         self.executor
             .execute_many(self.client, builder.request, Vec::from_iter(ids))
             .await
-            .into_iter()
-            .map(|(k, v)| (k, v.map(crate::user::Response::from_response)))
-            .collect()
     }
 
     #[cfg(feature = "faction")]
@@ -77,7 +71,6 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
-            .map(crate::faction::Response::from_response)
     }
 
     #[cfg(feature = "faction")]
@@ -99,9 +92,6 @@ where
         self.executor
             .execute_many(self.client, builder.request, Vec::from_iter(ids))
             .await
-            .into_iter()
-            .map(|(k, v)| (k, v.map(crate::faction::Response::from_response)))
-            .collect()
     }
 
     #[cfg(feature = "market")]
@@ -117,7 +107,6 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
-            .map(crate::market::Response::from_response)
     }
 
     #[cfg(feature = "market")]
@@ -139,9 +128,6 @@ where
         self.executor
             .execute_many(self.client, builder.request, Vec::from_iter(ids))
             .await
-            .into_iter()
-            .map(|(k, v)| (k, v.map(crate::market::Response::from_response)))
-            .collect()
     }
 
     #[cfg(feature = "torn")]
@@ -157,7 +143,6 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
-            .map(crate::torn::Response::from_response)
     }
 
     #[cfg(feature = "torn")]
@@ -179,9 +164,6 @@ where
         self.executor
             .execute_many(self.client, builder.request, Vec::from_iter(ids))
             .await
-            .into_iter()
-            .map(|(k, v)| (k, v.map(crate::torn::Response::from_response)))
-            .collect()
     }
 
     #[cfg(feature = "key")]
@@ -197,7 +179,6 @@ where
         self.executor
             .execute(self.client, builder.request, builder.id)
             .await
-            .map(crate::key::Response::from_response)
     }
 }
 
@@ -213,7 +194,7 @@ where
         client: &C,
         request: ApiRequest<A>,
         id: Option<String>,
-    ) -> Result<ApiResponse, Self::Error>
+    ) -> Result<A::Response, Self::Error>
     where
         A: ApiSelection;
 
@@ -222,7 +203,7 @@ where
         client: &C,
         request: ApiRequest<A>,
         ids: Vec<I>,
-    ) -> HashMap<I, Result<ApiResponse, Self::Error>>
+    ) -> HashMap<I, Result<A::Response, Self::Error>>
     where
         A: ApiSelection,
         I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync;
@@ -240,7 +221,7 @@ where
         client: &C,
         request: ApiRequest<A>,
         id: Option<String>,
-    ) -> Result<ApiResponse, Self::Error>
+    ) -> Result<A::Response, Self::Error>
     where
         A: ApiSelection,
     {
@@ -248,7 +229,7 @@ where
 
         let value = client.request(url).await.map_err(ApiClientError::Client)?;
 
-        Ok(ApiResponse::from_value(value)?)
+        Ok(ApiResponse::from_value(value)?.into())
     }
 
     async fn execute_many<A, I>(
@@ -256,7 +237,7 @@ where
         client: &C,
         request: ApiRequest<A>,
         ids: Vec<I>,
-    ) -> HashMap<I, Result<ApiResponse, Self::Error>>
+    ) -> HashMap<I, Result<A::Response, Self::Error>>
     where
         A: ApiSelection,
         I: ToString + std::hash::Hash + std::cmp::Eq + Send + Sync,
@@ -270,7 +251,11 @@ where
 
             (
                 i,
-                value.and_then(|v| ApiResponse::from_value(v).map_err(Into::into)),
+                value.and_then(|v| {
+                    ApiResponse::from_value(v)
+                        .map(Into::into)
+                        .map_err(Into::into)
+                }),
             )
         }))
         .await;
