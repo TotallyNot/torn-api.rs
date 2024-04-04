@@ -267,9 +267,9 @@ where
     C: ApiClient,
     S: KeyPoolStorage,
 {
-    client: C,
+    pub client: C,
     pub storage: S,
-    options: Arc<PoolOptions>,
+    pub options: Arc<PoolOptions>,
 }
 
 impl<C, S> KeyPool<C, S>
