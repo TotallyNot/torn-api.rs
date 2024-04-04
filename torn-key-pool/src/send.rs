@@ -29,7 +29,9 @@ where
     where
         A: ApiSelection,
     {
-        request.comment = self.options.comment.clone();
+        if request.comment.is_none() {
+            request.comment = self.options.comment.clone();
+        }
         if let Some(hook) = self.options.hooks_before.get(&std::any::TypeId::of::<A>()) {
             let concrete = hook
                 .downcast_ref::<BeforeHook<A, S::Key, S::Domain>>()
@@ -113,7 +115,9 @@ where
             }
         };
 
-        request.comment = self.options.comment.clone();
+        if request.comment.is_none() {
+            request.comment = self.options.comment.clone();
+        }
         let request_ref = &request;
 
         let tuples =
