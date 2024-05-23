@@ -10,8 +10,6 @@ pub enum MarketSelection {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct BazaarItem {
-    #[serde(rename = "ID")]
-    pub id: u32,
     pub cost: u64,
     pub quantity: u32,
 }
