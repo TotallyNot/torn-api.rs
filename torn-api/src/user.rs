@@ -41,7 +41,7 @@ pub enum UserSelection {
 
 pub type Selection = UserSelection;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Hash)]
 pub enum Gender {
     Male,
     Female,
@@ -495,7 +495,7 @@ impl<'de> Deserialize<'de> for Icon {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Job {
     Director,

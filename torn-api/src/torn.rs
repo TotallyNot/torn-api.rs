@@ -205,7 +205,7 @@ pub struct TerritoryWarReportWar {
     pub result: TerritoryWarOutcome,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum TerritoryWarReportRole {
     Aggressor,
@@ -229,7 +229,7 @@ pub struct TerritoryWarReport {
     pub factions: HashMap<i32, TerritoryWarReportFaction>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ItemType {
     Primary,
@@ -259,7 +259,7 @@ pub enum ItemType {
     Virus,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 //Missing hand to hand because it is not possible as a weapon
 pub enum WeaponType {
