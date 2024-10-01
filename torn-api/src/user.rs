@@ -55,6 +55,7 @@ pub struct Faction<'a> {
     pub days_in_faction: i16,
     pub position: &'a str,
     pub faction_tag: Option<&'a str>,
+    pub faction_tag_image: Option<&'a str>,
 }
 
 fn deserialize_faction<'de, D>(deserializer: D) -> Result<Option<Faction<'de>>, D::Error>
