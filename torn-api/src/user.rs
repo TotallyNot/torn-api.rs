@@ -70,6 +70,7 @@ where
         DaysInFaction,
         Position,
         FactionTag,
+        FactionTagImage,
     }
 
     struct FactionVisitor;
@@ -90,6 +91,7 @@ where
             let mut days_in_faction = None;
             let mut position = None;
             let mut faction_tag = None;
+            let mut faction_tag_image = None;
 
             while let Some(key) = map.next_key()? {
                 match key {
@@ -107,6 +109,9 @@ where
                     }
                     Field::FactionTag => {
                         faction_tag = map.next_value()?;
+                    }
+                    Field::FactionTagImage => {
+                        faction_tag_image = map.next_value()?;
                     }
                 }
             }
@@ -126,6 +131,7 @@ where
                     days_in_faction,
                     position,
                     faction_tag,
+                    faction_tag_image,
                 }))
             }
         }
