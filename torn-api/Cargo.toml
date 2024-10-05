@@ -1,6 +1,6 @@
 [package]
 name = "torn-api"
-version = "0.7.4"
+version = "0.7.5"
 edition = "2021"
 rust-version = "1.75.0"
 authors = ["Pyrit [2111649]"]
