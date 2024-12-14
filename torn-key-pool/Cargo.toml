@@ -1,6 +1,6 @@
 [package]
 name = "torn-key-pool"
-version = "0.8.3"
+version = "0.9.0"
 edition = "2021"
 authors = ["Pyrit [2111649]"]
 license = "MIT"
@@ -19,25 +19,25 @@ actix-runtime = [ "dep:actix-rt", "dep:rand" ]
 [dependencies]
 torn-api = { path = "../torn-api", default-features = false, version = "0.7" }
 async-trait = "0.1"
-thiserror = "1"
+thiserror = "2"
 
-sqlx = { version = "0.7", features = [ "postgres", "chrono", "json" ], optional = true }
+sqlx = { version = "0.8", features = [ "postgres", "chrono", "json", "derive" ], optional = true, default-features = false }
 serde = { version = "1.0", optional = true }
 chrono = { version = "0.4", optional = true }
-indoc = { version = "1", optional = true }
+indoc = { version = "2", optional = true }
 tokio = { version = "1", optional = true, default-features = false, features = ["time"] }
 actix-rt = { version = "2", optional = true, default-features = false }
 rand = { version = "0.8", optional = true }
 futures = "0.3"
 
-reqwest = { version = "0.11", default-features = false, features = [ "json" ], optional = true }
+reqwest = { version = "0.12", default-features = false, features = [ "json" ], optional = true }
 awc = { version = "3", default-features = false, optional = true }
 
 [dev-dependencies]
 torn-api = { path = "../torn-api", features = [ "reqwest" ] }
-sqlx = { version = "0.7", features = [ "runtime-tokio-rustls" ] }
-dotenv = "0.15.0"
-tokio = { version = "1.24.2", features = ["test-util", "rt", "macros"] }
-tokio-test = "0.4.2"
-reqwest = { version = "0.11", default-features = true }
+sqlx = { version = "0.8", features = [ "runtime-tokio-rustls" ] }
+dotenvy = "0.15"
+tokio = { version = "1.42", features = ["rt"] }
+tokio-test = "0.4"
+reqwest = { version = "0.12", default-features = true }
 awc = { version = "3", features = [ "rustls" ] }
