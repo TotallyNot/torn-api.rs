@@ -15,26 +15,51 @@ pub enum EnumRepr {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnumVariantTupleValue {
-    Ref(String),
+    Ref { ty_name: String },
+    ArrayOfRefs { ty_name: String },
 }
 
 impl EnumVariantTupleValue {
     pub fn from_schema(schema: &OpenApiType) -> Option<Self> {
-        if let OpenApiType {
-            ref_path: Some(path),
-            ..
-        } = schema
-        {
-            Some(Self::Ref((*path).to_owned()))
-        } else {
-            None
+        match schema {
+            OpenApiType {
+                ref_path: Some(path),
+                ..
+            } => Some(Self::Ref {
+                ty_name: path.strip_prefix("#/components/schemas/")?.to_owned(),
+            }),
+            OpenApiType {
+                r#type: Some("array"),
+                items: Some(items),
+                ..
+            } => {
+                let OpenApiType {
+                    ref_path: Some(path),
+                    ..
+                } = items.as_ref()
+                else {
+                    return None;
+                };
+                Some(Self::ArrayOfRefs {
+                    ty_name: path.strip_prefix("#/components/schemas/")?.to_owned(),
+                })
+            }
+            _ => None,
         }
     }
 
-    pub fn name(&self) -> Option<&str> {
-        let Self::Ref(path) = self;
+    pub fn type_name(&self) -> &str {
+        match self {
+            Self::Ref { ty_name } => ty_name,
+            Self::ArrayOfRefs { ty_name } => ty_name,
+        }
+    }
 
-        path.strip_prefix("#/components/schemas/")
+    pub fn name(&self) -> String {
+        match self {
+            Self::Ref { ty_name } => ty_name.clone(),
+            Self::ArrayOfRefs { ty_name } => format!("{ty_name}s"),
+        }
     }
 }
 
@@ -103,7 +128,7 @@ impl EnumVariant {
                 let mut val_tys = Vec::with_capacity(values.len());
 
                 for value in values {
-                    let ty_name = value.name()?;
+                    let ty_name = value.type_name();
                     let ty_name = format_ident!("{ty_name}");
 
                     val_tys.push(quote! {
@@ -216,7 +241,7 @@ impl Enum {
 
         for schema in schemas {
             let value = EnumVariantTupleValue::from_schema(schema)?;
-            let name = value.name()?.to_owned();
+            let name = value.name();
 
             result.variants.push(EnumVariant {
                 name,
@@ -253,11 +278,15 @@ impl Enum {
 
         let mut derives = vec![];
 
-        if self.copy {
-            derives.extend_from_slice(&["Copy", "Hash"]);
+        if self.repr.is_some() {
+            derives.push(quote! { serde_repr::Deserialize_repr });
+        } else {
+            derives.push(quote! { serde::Deserialize });
         }
 
-        let derives = derives.into_iter().map(|d| format_ident!("{d}"));
+        if self.copy {
+            derives.push(quote! { Copy, Hash });
+        }
 
         let serde_attr = self.untagged.then(|| {
             quote! {
@@ -279,7 +308,7 @@ impl Enum {
 
         Some(quote! {
             #desc
-            #[derive(Debug, Clone, PartialEq, serde::Deserialize, #(#derives),*)]
+            #[derive(Debug, Clone, PartialEq, #(#derives),*)]
             #serde_attr
             pub enum #name {
                 #(#variants),*

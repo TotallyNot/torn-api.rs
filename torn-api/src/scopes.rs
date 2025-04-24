@@ -6,7 +6,13 @@ pub(super) mod test {
 
     use tokio::sync::mpsc;
 
-    use crate::executor::ReqwestClient;
+    use crate::{
+        executor::{ExecutorExt, ReqwestClient},
+        models::{
+            AttackCode, FactionSelectionName, PersonalStatsCategoryEnum, PersonalStatsStatName,
+            UserListEnum,
+        },
+    };
 
     use super::*;
 
@@ -52,6 +58,21 @@ pub(super) mod test {
         ticket_tx.send(tx).await.unwrap();
 
         rx.recv().await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn faction() {
+        let client = test_client().await;
+
+        let r = client
+            .faction()
+            .for_selections(|b| {
+                b.selections([FactionSelectionName::Basic, FactionSelectionName::Balance])
+            })
+            .await
+            .unwrap();
+
+        r.faction_basic_response().unwrap();
     }
 
     #[tokio::test]
@@ -193,7 +214,7 @@ pub(super) mod test {
         let faction_scope = FactionScope(&client);
 
         faction_scope
-            .crime_for_id(468347.into(), |b| b)
+            .crime_for_crime_id(468347.into(), |b| b)
             .await
             .unwrap();
     }
@@ -277,7 +298,7 @@ pub(super) mod test {
         let faction_scope = FactionScope(&client);
 
         faction_scope
-            .rankedwarreport_for_id(24424.into(), |b| b)
+            .rankedwarreport_for_ranked_war_id(24424.into(), |b| b)
             .await
             .unwrap();
     }
@@ -337,7 +358,7 @@ pub(super) mod test {
     }
 
     #[tokio::test]
-    async fn lookup() {
+    async fn faction_lookup() {
         let client = test_client().await;
 
         let faction_scope = FactionScope(&client);
@@ -520,7 +541,7 @@ pub(super) mod test {
         let racing_scope = TornScope(&client);
 
         racing_scope
-            .attacklog(|b| b.log("ec987a60a22155cbfb7c1625cbb2092f".to_owned()))
+            .attacklog(|b| b.log(AttackCode("ec987a60a22155cbfb7c1625cbb2092f".to_owned())))
             .await
             .unwrap();
     }
@@ -661,7 +682,7 @@ pub(super) mod test {
         let torn_scope = TornScope(&client);
 
         torn_scope
-            .subcrimes_for_crime_id("3".into(), |b| b)
+            .subcrimes_for_crime_id(3.into(), |b| b)
             .await
             .unwrap();
     }
@@ -669,7 +690,6 @@ pub(super) mod test {
     #[tokio::test]
     async fn torn_lookup() {
         let client = test_client().await;
-
         let torn_scope = TornScope(&client);
 
         torn_scope.lookup(|b| b).await.unwrap();
@@ -682,5 +702,256 @@ pub(super) mod test {
         let torn_scope = TornScope(&client);
 
         torn_scope.timestamp(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_attacks() {
+        let client = test_client().await;
+
+        client.user().attacks(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_attacksfull() {
+        let client = test_client().await;
+
+        client.user().attacksfull(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_bounties() {
+        let client = test_client().await;
+
+        client.user().bounties(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_bounties_for_id() {
+        let client = test_client().await;
+
+        client
+            .user()
+            .bounties_for_id(986228.into(), |b| b)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_calendar() {
+        let client = test_client().await;
+
+        client.user().calendar(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_crimes_for_crime_id() {
+        let client = test_client().await;
+
+        client
+            .user()
+            .crimes_for_crime_id(10.into(), |b| b)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_enlisted_cars() {
+        let client = test_client().await;
+
+        client.user().enlistedcars(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_factionbalance() {
+        let client = test_client().await;
+
+        client.user().factionbalance(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_forumfeed() {
+        let client = test_client().await;
+
+        client.user().forumfeed(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_forumfriends() {
+        let client = test_client().await;
+
+        client.user().forumfriends(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_forumposts() {
+        let client = test_client().await;
+
+        client.user().forumposts(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_forumposts_for_id() {
+        let client = test_client().await;
+
+        client
+            .user()
+            .forumposts_for_id(1.into(), |b| b)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_forumsubscribedthreads() {
+        let client = test_client().await;
+
+        client.user().forumsubscribedthreads(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_forumthreads() {
+        let client = test_client().await;
+
+        client.user().forumthreads(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_forumthreads_for_id() {
+        let client = test_client().await;
+
+        client
+            .user()
+            .forumthreads_for_id(1.into(), |b| b)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_hof() {
+        let client = test_client().await;
+
+        client.user().hof(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_hof_for_id() {
+        let client = test_client().await;
+
+        client.user().hof_for_id(1.into(), |b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_itemmarket() {
+        let client = test_client().await;
+
+        client.user().itemmarket(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_jobranks() {
+        let client = test_client().await;
+
+        client.user().jobranks(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_list() {
+        let client = test_client().await;
+
+        client
+            .user()
+            .list(|b| b.cat(UserListEnum::Friends))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_organizedcrime() {
+        let client = test_client().await;
+
+        client.user().organizedcrime(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_personalstats() {
+        let client = test_client().await;
+
+        client
+            .user()
+            .personalstats(|b| {
+                b.stat([PersonalStatsStatName::Piercinghits])
+                    .timestamp(1737661955)
+            })
+            .await
+            .unwrap();
+
+        client
+            .user()
+            .personalstats(|b| b.cat(PersonalStatsCategoryEnum::All))
+            .await
+            .unwrap();
+
+        client
+            .user()
+            .personalstats(|b| b.cat(PersonalStatsCategoryEnum::Popular))
+            .await
+            .unwrap();
+
+        client
+            .user()
+            .personalstats(|b| b.cat(PersonalStatsCategoryEnum::Drugs))
+            .await
+            .unwrap();
+
+        client
+            .user()
+            .personalstats(|b| b.stat([PersonalStatsStatName::Piercinghits]))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_personalstats_for_id() {
+        let client = test_client().await;
+
+        client
+            .user()
+            .personalstats_for_id(1.into(), |b| b.cat(PersonalStatsCategoryEnum::All))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_races() {
+        let client = test_client().await;
+
+        client.user().races(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_revives() {
+        let client = test_client().await;
+
+        client.user().revives(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_revivesfull() {
+        let client = test_client().await;
+
+        client.user().revives_full(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_lookup() {
+        let client = test_client().await;
+
+        client.user().lookup(|b| b).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_timestamp() {
+        let client = test_client().await;
+
+        client.user().attacks(|b| b).await.unwrap();
     }
 }

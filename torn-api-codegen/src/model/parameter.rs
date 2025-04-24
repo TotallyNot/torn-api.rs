@@ -217,6 +217,12 @@ impl Parameter {
                                 Self(inner)
                             }
                         }
+
+                        impl From<i32> for #name {
+                            fn from(inner: i32) -> Self {
+                                Self(inner)
+                            }
+                        }
                     }
                 };
 
@@ -315,6 +321,14 @@ The default value [Self::{}](self::{}#variant.{})"#,
                                 }
                             }
                             Ok(())
+                        }
+                    }
+
+                    impl<T> From<T> for #name where T: IntoIterator<Item = #inner_ty> {
+                        fn from(value: T) -> #name {
+                            let items = value.into_iter().collect();
+
+                            Self(items)
                         }
                     }
                 });

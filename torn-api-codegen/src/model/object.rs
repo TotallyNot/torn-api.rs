@@ -280,7 +280,7 @@ impl Object {
 
         for (prop_name, prop) in props {
             // HACK: This will cause a duplicate key otherwise
-            if *prop_name == "itemDetails" {
+            if ["itemDetails", "sci-fi", "non-attackers", "co-leader_id"].contains(prop_name) {
                 continue;
             }
 

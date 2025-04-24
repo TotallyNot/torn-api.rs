@@ -154,7 +154,7 @@ impl Path {
                 PathParameter::Component(param) => (false, param),
             };
 
-            let ty = match &param.r#type {
+            let (ty, builder_param) = match &param.r#type {
                 ParameterType::I32 { .. } | ParameterType::Enum { .. } => {
                     let ty_name = format_ident!("{}", param.name);
 
@@ -162,31 +162,43 @@ impl Path {
                         ns.push_element(param.codegen()?);
                         let path = ns.get_ident();
 
-                        quote! {
-                            crate::request::models::#path::#ty_name
-                        }
+                        (
+                            quote! {
+                                crate::request::models::#path::#ty_name
+                            },
+                            Some(quote! { #[builder(into)] }),
+                        )
                     } else {
-                        quote! {
-                            crate::parameters::#ty_name
-                        }
+                        (
+                            quote! {
+                                crate::parameters::#ty_name
+                            },
+                            Some(quote! { #[builder(into)]}),
+                        )
                     }
                 }
-                ParameterType::String => quote! { String },
-                ParameterType::Boolean => quote! { bool },
+                ParameterType::String => (quote! { String }, None),
+                ParameterType::Boolean => (quote! { bool }, None),
                 ParameterType::Schema { type_name } => {
                     let ty_name = format_ident!("{}", type_name);
 
-                    quote! {
-                        crate::models::#ty_name
-                    }
+                    (
+                        quote! {
+                            crate::models::#ty_name
+                        },
+                        None,
+                    )
                 }
                 ParameterType::Array { .. } => {
                     ns.push_element(param.codegen()?);
                     let ty_name = param.r#type.codegen_type_name(&param.name);
                     let path = ns.get_ident();
-                    quote! {
-                        crate::request::models::#path::#ty_name
-                    }
+                    (
+                        quote! {
+                            crate::request::models::#path::#ty_name
+                        },
+                        Some(quote! { #[builder(into)] }),
+                    )
                 }
             };
 
@@ -199,6 +211,7 @@ impl Path {
                 let path_name = format_ident!("{}", param.value);
                 start_fields.push(quote! {
                     #[builder(start_fn)]
+                    #builder_param
                     pub #name: #ty
                 });
                 fmt_val.push(quote! {
@@ -218,6 +231,7 @@ impl Path {
                 };
 
                 fields.push(quote! {
+                    #builder_param
                     pub #name: #ty
                 });
             }
@@ -260,7 +274,7 @@ impl Path {
             #ns
 
             #[derive(Debug, Clone, bon::Builder)]
-            #[builder(state_mod(vis = "pub(crate)"))]
+            #[builder(state_mod(vis = "pub(crate)"), on(String, into))]
             pub struct #name {
                 #(#start_fields),*
             }
