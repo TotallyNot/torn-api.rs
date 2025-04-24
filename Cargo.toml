@@ -2,6 +2,11 @@
 resolver = "2"
 members = ["torn-api", "torn-api-codegen"]
 
+[workspace.package]
+license-file = "./LICENSE"
+repository = "https://github.com/TotallyNot/torn-api.rs.git"
+homepage = "https://github.com/TotallyNot/torn-api.rs.git"
+
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }

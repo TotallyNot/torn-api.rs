@@ -4,6 +4,9 @@ authors = ["Pyrit [2111649]"]
 version = "0.1.0"
 edition = "2024"
 description = "Contains the v2 torn API model descriptions and codegen for the bindings"
+license-file = { workspace = true }
+repository = { workspace = true }
+homepage = { workspace = true }
 
 [dependencies]
 serde = { workspace = true }
