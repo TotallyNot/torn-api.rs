@@ -1,51 +1,27 @@
 [package]
 name = "torn-api"
-version = "0.7.5"
-edition = "2021"
-rust-version = "1.75.0"
-authors = ["Pyrit [2111649]"]
-license = "MIT"
-repository = "https://github.com/TotallyNot/torn-api.rs.git"
-homepage = "https://github.com/TotallyNot/torn-api.rs.git"
-description = "Torn API bindings for rust"
-
-[[bench]]
-name = "deserialisation_benchmark"
-harness = false
-
-[features]
-default = [ "reqwest", "user", "faction", "torn", "key", "market" ]
-reqwest = [ "dep:reqwest" ]
-awc = [ "dep:awc" ]
-decimal = [ "dep:rust_decimal" ]
-
-user = [ "__common" ]
-faction = [ "__common" ]
-torn = [ "__common" ]
-market = [ "__common" ]
-key = []
-
-__common = []
+version = "1.0.0"
+edition = "2024"
 
 [dependencies]
-serde = { version = "1", features = [ "derive" ] }
-serde_json = "1"
-chrono = { version = "0.4.31", features = [ "serde" ], default-features = false }
-async-trait = "0.1"
-thiserror = "1"
-futures = "0.3"
-
-reqwest = { version = "0.12", default-features = false, features = [ "json" ], optional = true }
-awc = { version = "3", default-features = false, optional = true }
-rust_decimal = { version = "1", default-features = false, optional = true, features = [ "serde" ] }
-
-torn-api-macros = { path = "../torn-api-macros", version = "0.3.1" }
+serde = { workspace = true, features = ["derive"] }
+serde_repr = "0.1"
+serde_json = { workspace = true }
+bon = "3.6"
+bytes = "1"
+http = "1"
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+    "json",
+    "brotli",
+] }
+thiserror = "2"
 
 [dev-dependencies]
-actix-rt = { version = "2.7.0" }
-dotenv = "0.15.0"
-tokio = { version = "1.20.1", features = ["test-util", "rt", "macros"] }
-tokio-test = "0.4.2"
-reqwest = { version = "0.12", default-features = true }
-awc = { version = "3", features = [ "rustls" ] }
-criterion = "0.5"
+tokio = { version = "1", features = ["full"] }
+
+[build-dependencies]
+torn-api-codegen = { path = "../torn-api-codegen" }
+syn = { workspace = true, features = ["parsing"] }
+proc-macro2 = { workspace = true }
+prettyplease = "0.2"

@@ -1,4 +1,12 @@
+# rust
 /target
-/Cargo.lock
-.env
+
+# direnv
+.envrc
+.direnv
+
+# vim
+*.swp
+
+# mac os
 .DS_Store

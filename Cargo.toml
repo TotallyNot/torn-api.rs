@@ -1,3 +1,12 @@
 [workspace]
 resolver = "2"
-members = [ "torn-api-macros", "torn-api", "torn-key-pool" ]
+members = ["torn-api", "torn-api-codegen"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+syn = { version = "2" }
+proc-macro2 = { version = "1" }
+
+[profile.dev.package.torn-api-codegen]
+opt-level = 3
