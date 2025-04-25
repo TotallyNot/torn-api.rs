@@ -3,7 +3,7 @@
     "info": {
         "title": "Torn API",
         "description": "\n * The development of Torn's API v2 is still ongoing.\n * If selections remain unaltered, they will default to the API v1 version.\n * Unlike API v1, API v2 accepts both selections and IDs as path and query parameters.\n * If any discrepancies or errors are found, please submit a [bug report](https://www.torn.com/forums.php#/p=forums&f=19&b=0&a=0) on the Torn Forums.\n * In case you're using bots to check for changes on openapi.json file, make sure to specificy a custom user-agent header - CloudFlare sometimes prevents requests from default user-agents.",
-        "version": "1.3.1"
+        "version": "1.3.2"
     },
     "servers": [
         {
@@ -8773,7 +8773,8 @@
                     "attacksdamaging",
                     "attacksrunaway",
                     "highestterritories",
-                    "territoryrespect"
+                    "territoryrespect",
+                    "membersamount"
                 ]
             },
             "FactionBranchStateEnum": {
@@ -13864,25 +13865,30 @@
                 "type": "object"
             },
             "RacingRaceDetailsResponse": {
-                "allOf": [
-                    {
-                        "required": [
-                            "results"
-                        ],
-                        "properties": {
-                            "results": {
-                                "type": "array",
-                                "items": {
-                                    "$ref": "#/components/schemas/RacerDetails"
-                                }
+                "properties": {
+                    "race": {
+                        "allOf": [
+                            {
+                                "required": [
+                                    "results"
+                                ],
+                                "properties": {
+                                    "results": {
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/components/schemas/RacerDetails"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            {
+                                "$ref": "#/components/schemas/Race"
                             }
-                        },
-                        "type": "object"
-                    },
-                    {
-                        "$ref": "#/components/schemas/Race"
+                        ]
                     }
-                ]
+                },
+                "type": "object"
             },
             "RacingSelectionName": {
                 "type": "string",
@@ -15352,7 +15358,14 @@
                     "searchforcash",
                     "shoplifting",
                     "stats",
-                    "stocks"
+                    "stocks",
+                    "chainreport",
+                    "rackets",
+                    "rankedwarreport",
+                    "rankedwars",
+                    "territorynames",
+                    "territorywarreport",
+                    "territorywars"
                 ]
             },
             "TornLookupResponse": {
@@ -19062,10 +19075,7 @@
                         "format": "int64"
                     },
                     "rewards": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/UserCrimeUniquesReward"
-                        }
+                        "$ref": "#/components/schemas/UserCrimeUniquesReward"
                     }
                 },
                 "type": "object"
@@ -19139,6 +19149,9 @@
                             },
                             {
                                 "$ref": "#/components/schemas/UserCrimeDetailsScamming"
+                            },
+                            {
+                                "type": "null"
                             }
                         ]
                     }
@@ -19181,7 +19194,14 @@
                                 "$ref": "#/components/schemas/RaceCarId"
                             },
                             "name": {
-                                "type": "string"
+                                "oneOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
+                                ]
                             },
                             "worth": {
                                 "type": "integer",
@@ -19421,10 +19441,7 @@
                 ],
                 "properties": {
                     "hof": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/UserHofStats"
-                        }
+                        "$ref": "#/components/schemas/UserHofStats"
                     }
                 },
                 "type": "object"
