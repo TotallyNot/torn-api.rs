@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["torn-api", "torn-api-codegen"]
+members = ["torn-api", "torn-api-codegen", "torn-key-pool"]
 
 [workspace.package]
 license-file = "./LICENSE"

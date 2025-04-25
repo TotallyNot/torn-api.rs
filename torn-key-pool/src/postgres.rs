@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
+use futures::future::BoxFuture;
 use indoc::indoc;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use thiserror::Error;
@@ -17,28 +15,28 @@ impl<T> PgKeyDomain for T where
 {
 }
 
-#[derive(Debug, Error, Clone)]
-pub enum PgStorageError<D>
+#[derive(Debug, Error)]
+pub enum PgKeyPoolError<D>
 where
     D: PgKeyDomain,
 {
-    #[error(transparent)]
-    Pg(Arc<sqlx::Error>),
+    #[error("Databank: {0}")]
+    Pg(#[from] sqlx::Error),
+
+    #[error("Network: {0}")]
+    Network(#[from] reqwest::Error),
+
+    #[error("Parsing: {0}")]
+    Parsing(#[from] serde_json::Error),
+
+    #[error("Api: {0}")]
+    Api(#[from] torn_api::ApiError),
 
     #[error("No key avalaible for domain {0:?}")]
     Unavailable(KeySelector<PgKey<D>, D>),
 
     #[error("Key not found: '{0:?}'")]
     KeyNotFound(KeySelector<PgKey<D>, D>),
-}
-
-impl<D> From<sqlx::Error> for PgStorageError<D>
-where
-    D: PgKeyDomain,
-{
-    fn from(value: sqlx::Error) -> Self {
-        Self::Pg(Arc::new(value))
-    }
 }
 
 #[derive(Debug, Clone, FromRow)]
@@ -127,7 +125,7 @@ where
         }
     }
 
-    pub async fn initialise(&self) -> Result<(), PgStorageError<D>> {
+    pub async fn initialise(&self) -> Result<(), PgKeyPoolError<D>> {
         sqlx::query(indoc! {r#"
             CREATE TABLE IF NOT EXISTS api_keys (
                 id serial primary key,
@@ -184,19 +182,11 @@ where
 
 #[cfg(feature = "tokio-runtime")]
 async fn random_sleep() {
-    use rand::{thread_rng, Rng};
-    let dur = tokio::time::Duration::from_millis(thread_rng().gen_range(1..50));
+    use rand::{rng, Rng};
+    let dur = tokio::time::Duration::from_millis(rng().random_range(1..50));
     tokio::time::sleep(dur).await;
 }
 
-#[cfg(all(not(feature = "tokio-runtime"), feature = "actix-runtime"))]
-async fn random_sleep() {
-    use rand::{thread_rng, Rng};
-    let dur = std::time::Duration::from_millis(thread_rng().gen_range(1..50));
-    actix_rt::time::sleep(dur).await;
-}
-
-#[async_trait]
 impl<D> KeyPoolStorage for PgKeyPoolStorage<D>
 where
     D: PgKeyDomain,
@@ -204,7 +194,7 @@ where
     type Key = PgKey<D>;
     type Domain = D;
 
-    type Error = PgStorageError<D>;
+    type Error = PgKeyPoolError<D>;
 
     async fn acquire_key<S>(&self, selector: S) -> Result<Self::Key, Self::Error>
     where
@@ -222,10 +212,10 @@ where
                 let mut qb = QueryBuilder::new(indoc::indoc! {
                     r#"
                     with key as (
-                        select 
+                        select
                             id,
                             0::int2 as uses
-                        from api_keys where last_used < date_trunc('minute', now()) 
+                        from api_keys where last_used < date_trunc('minute', now())
                             and (cooldown is null or now() >= cooldown)
                             and "#
                 });
@@ -235,9 +225,9 @@ where
                 qb.push(indoc::indoc! {
                     "
                     \n    union (
-                            select id, uses from api_keys 
-                            where last_used >= date_trunc('minute', now()) 
-                                and (cooldown is null or now() >= cooldown) 
+                            select id, uses from api_keys
+                            where last_used >= date_trunc('minute', now())
+                                and (cooldown is null or now() >= cooldown)
                                 and "
                 });
 
@@ -254,7 +244,7 @@ where
                         cooldown = null,
                         flag = null,
                         last_used = now()
-                    from key where 
+                    from key where
                         api_keys.id=key.id and key.uses < "
                 });
 
@@ -280,13 +270,23 @@ where
             match attempt {
                 Ok(Some(result)) => return Ok(result),
                 Ok(None) => {
-                    return self
-                        .acquire_key(
-                            selector
-                                .fallback()
-                                .ok_or_else(|| PgStorageError::Unavailable(selector))?,
-                        )
-                        .await
+                    fn recurse<D>(
+                        storage: &PgKeyPoolStorage<D>,
+                        selector: KeySelector<PgKey<D>, D>,
+                    ) -> BoxFuture<Result<PgKey<D>, PgKeyPoolError<D>>>
+                    where
+                        D: PgKeyDomain,
+                    {
+                        Box::pin(storage.acquire_key(selector))
+                    }
+
+                    return recurse(
+                        self,
+                        selector
+                            .fallback()
+                            .ok_or_else(|| PgKeyPoolError::Unavailable(selector))?,
+                    )
+                    .await;
                 }
                 Err(error) => {
                     if let Some(db_error) = error.as_database_error() {
@@ -365,7 +365,7 @@ where
                     let available = max.uses - key.uses;
                     let using = std::cmp::min(available, (number as i16) - (result.len() as i16));
                     key.uses += using;
-                    result.extend(std::iter::repeat(key.clone()).take(using as usize));
+                    result.extend(std::iter::repeat_n(key.clone(), using as usize));
 
                     if result.len() == number as usize {
                         break;
@@ -406,14 +406,25 @@ where
             match attempt {
                 Ok(Some(result)) => return Ok(result),
                 Ok(None) => {
-                    return self
-                        .acquire_many_keys(
-                            selector
-                                .fallback()
-                                .ok_or_else(|| Self::Error::Unavailable(selector))?,
-                            number,
-                        )
-                        .await
+                    fn recurse<D>(
+                        storage: &PgKeyPoolStorage<D>,
+                        selector: KeySelector<PgKey<D>, D>,
+                        number: i64,
+                    ) -> BoxFuture<Result<Vec<PgKey<D>>, PgKeyPoolError<D>>>
+                    where
+                        D: PgKeyDomain,
+                    {
+                        Box::pin(storage.acquire_many_keys(selector, number))
+                    }
+
+                    return recurse(
+                        self,
+                        selector
+                            .fallback()
+                            .ok_or_else(|| Self::Error::Unavailable(selector))?,
+                        number,
+                    )
+                    .await;
                 }
                 Err(error) => {
                     if let Some(db_error) = error.as_database_error() {
@@ -431,57 +442,24 @@ where
         }
     }
 
-    async fn flag_key(&self, key: Self::Key, code: u8) -> Result<bool, Self::Error> {
-        match code {
-            2 | 10 | 13 => {
-                // invalid key, owner fedded or owner inactive
-                sqlx::query(
-                    "update api_keys set cooldown='infinity'::timestamptz, flag=$1 where id=$2",
-                )
-                .bind(code as i16)
-                .bind(key.id)
-                .execute(&self.pool)
-                .await?;
-                Ok(true)
-            }
-            5 => {
-                // too many requests
-                sqlx::query(
-                    "update api_keys set cooldown=date_trunc('min', now()) + interval '1 min', \
-                     flag=5 where id=$1",
-                )
-                .bind(key.id)
-                .execute(&self.pool)
-                .await?;
-                Ok(true)
-            }
-            8 => {
-                // IP block
-                sqlx::query("update api_keys set cooldown=now() + interval '5 min', flag=8")
-                    .execute(&self.pool)
-                    .await?;
-                Ok(false)
-            }
-            9 => {
-                // API disabled
-                sqlx::query("update api_keys set cooldown=now() + interval '1 min', flag=9")
-                    .execute(&self.pool)
-                    .await?;
-                Ok(false)
-            }
-            14 => {
-                // daily read limit reached
-                sqlx::query(
-                    "update api_keys set cooldown=date_trunc('day', now()) + interval '1 day', \
-                     flag=14 where id=$1",
-                )
-                .bind(key.id)
-                .execute(&self.pool)
-                .await?;
-                Ok(true)
-            }
-            _ => Ok(false),
-        }
+    async fn timeout_key<S>(
+        &self,
+        selector: S,
+        duration: std::time::Duration,
+    ) -> Result<(), Self::Error>
+    where
+        S: IntoSelector<Self::Key, Self::Domain>,
+    {
+        let selector = selector.into_selector();
+
+        let mut qb = QueryBuilder::new("update api_keys set cooldown=now() + ");
+        qb.push_bind(duration);
+        qb.push(" where ");
+        build_predicate(&mut qb, &selector);
+
+        qb.build().fetch_optional(&self.pool).await?;
+
+        Ok(())
     }
 
     async fn store_key(
@@ -546,7 +524,7 @@ where
         qb.build_query_as()
             .fetch_optional(&self.pool)
             .await?
-            .ok_or_else(|| PgStorageError::KeyNotFound(selector))
+            .ok_or_else(|| PgKeyPoolError::KeyNotFound(selector))
     }
 
     async fn add_domain_to_key<S>(&self, selector: S, domain: D) -> Result<Self::Key, Self::Error>
@@ -566,7 +544,7 @@ where
         qb.build_query_as()
             .fetch_optional(&self.pool)
             .await?
-            .ok_or_else(|| PgStorageError::KeyNotFound(selector))
+            .ok_or_else(|| PgKeyPoolError::KeyNotFound(selector))
     }
 
     async fn remove_domain_from_key<S>(
@@ -590,7 +568,7 @@ where
         qb.build_query_as()
             .fetch_optional(&self.pool)
             .await?
-            .ok_or_else(|| PgStorageError::KeyNotFound(selector))
+            .ok_or_else(|| PgKeyPoolError::KeyNotFound(selector))
     }
 
     async fn set_domains_for_key<S>(
@@ -612,13 +590,13 @@ where
         qb.build_query_as()
             .fetch_optional(&self.pool)
             .await?
-            .ok_or_else(|| PgStorageError::KeyNotFound(selector))
+            .ok_or_else(|| PgKeyPoolError::KeyNotFound(selector))
     }
 }
 
 #[cfg(test)]
 pub(crate) mod test {
-    use std::sync::Arc;
+    use std::{sync::Arc, time::Duration};
 
     use sqlx::Row;
 
@@ -652,7 +630,7 @@ pub(crate) mod test {
         storage.initialise().await.unwrap();
 
         let key = storage
-            .store_key(1, std::env::var("APIKEY").unwrap(), vec![Domain::All])
+            .store_key(1, std::env::var("API_KEY").unwrap(), vec![Domain::All])
             .await
             .unwrap();
 
@@ -813,34 +791,6 @@ pub(crate) mod test {
         assert_eq!(keys.len(), 2);
         for key in keys {
             assert_eq!(key.uses, 5);
-        }
-    }
-
-    #[sqlx::test]
-    async fn test_flag_key_one(pool: PgPool) {
-        let (storage, key) = setup(pool).await;
-
-        assert!(storage.flag_key(key, 2).await.unwrap());
-
-        match storage.acquire_key(Domain::All).await.unwrap_err() {
-            PgStorageError::Unavailable(KeySelector::Has(domains)) => {
-                assert_eq!(domains, vec![Domain::All])
-            }
-            why => panic!("Expected domain unavailable error but found '{why}'"),
-        }
-    }
-
-    #[sqlx::test]
-    async fn test_flag_key_many(pool: PgPool) {
-        let (storage, key) = setup(pool).await;
-
-        assert!(storage.flag_key(key, 2).await.unwrap());
-
-        match storage.acquire_many_keys(Domain::All, 5).await.unwrap_err() {
-            PgStorageError::Unavailable(KeySelector::Has(domains)) => {
-                assert_eq!(domains, vec![Domain::All])
-            }
-            why => panic!("Expected domain unavailable error but found '{why}'"),
         }
     }
 
@@ -1023,6 +973,16 @@ pub(crate) mod test {
         let key = storage.read_key(KeySelector::Key(key.key)).await.unwrap();
 
         assert!(key.is_some());
+    }
+
+    #[sqlx::test]
+    async fn timeout(pool: PgPool) {
+        let (storage, key) = setup(pool).await;
+
+        storage
+            .timeout_key(KeySelector::Id(key.id()), Duration::from_secs(60))
+            .await
+            .unwrap();
     }
 
     #[sqlx::test]
