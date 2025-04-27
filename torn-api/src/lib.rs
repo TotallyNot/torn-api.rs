@@ -1,9 +1,12 @@
 use thiserror::Error;
 
 pub mod executor;
+#[cfg(feature = "models")]
 pub mod models;
+#[cfg(feature = "requests")]
 pub mod parameters;
 pub mod request;
+#[cfg(feature = "scopes")]
 pub mod scopes;
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]

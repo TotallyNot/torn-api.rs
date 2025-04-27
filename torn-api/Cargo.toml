@@ -1,17 +1,24 @@
 [package]
 name = "torn-api"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 description = "Auto-generated bindings for the v2 torn api"
 license-file = { workspace = true }
 repository = { workspace = true }
 homepage = { workspace = true }
 
+[features]
+default = ["scopes", "requests", "builder", "models"]
+scopes = ["builder"]
+builder = ["requests", "dep:bon"]
+requests = ["models"]
+models = ["dep:serde_repr"]
+
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
-serde_repr = "0.1"
+serde_repr = { version = "0.1", optional = true }
 serde_json = { workspace = true }
-bon = "3.6"
+bon = { version = "3.6", optional = true }
 bytes = "1"
 http = "1"
 reqwest = { version = "0.12", default-features = false, features = [
@@ -25,7 +32,7 @@ thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 
 [build-dependencies]
-torn-api-codegen = { path = "../torn-api-codegen", version = "0.1.1" }
+torn-api-codegen = { path = "../torn-api-codegen", version = "0.1.5" }
 syn = { workspace = true, features = ["parsing"] }
 proc-macro2 = { workspace = true }
 prettyplease = "0.2"

@@ -166,14 +166,14 @@ impl Path {
                             quote! {
                                 crate::request::models::#path::#ty_name
                             },
-                            Some(quote! { #[builder(into)] }),
+                            Some(quote! { #[cfg_attr(feature = "builder", builder(into))] }),
                         )
                     } else {
                         (
                             quote! {
                                 crate::parameters::#ty_name
                             },
-                            Some(quote! { #[builder(into)]}),
+                            Some(quote! { #[cfg_attr(feature = "builder", builder(into))]}),
                         )
                     }
                 }
@@ -197,7 +197,7 @@ impl Path {
                         quote! {
                             crate::request::models::#path::#ty_name
                         },
-                        Some(quote! { #[builder(into)] }),
+                        Some(quote! { #[cfg_attr(feature = "builder", builder(into))] }),
                     )
                 }
             };
@@ -210,7 +210,7 @@ impl Path {
                 discriminant_val.push(quote! { self.#name });
                 let path_name = format_ident!("{}", param.value);
                 start_fields.push(quote! {
-                    #[builder(start_fn)]
+                    #[cfg_attr(feature = "builder", builder(start_fn))]
                     #builder_param
                     pub #name: #ty
                 });
@@ -273,8 +273,9 @@ impl Path {
         Some(quote! {
             #ns
 
-            #[derive(Debug, Clone, bon::Builder)]
-            #[builder(state_mod(vis = "pub(crate)"), on(String, into))]
+            #[cfg_attr(feature = "builder", derive(bon::Builder))]
+            #[derive(Debug, Clone)]
+            #[cfg_attr(feature = "builder", builder(state_mod(vis = "pub(crate)"), on(String, into)))]
             pub struct #name {
                 #(#start_fields),*
             }

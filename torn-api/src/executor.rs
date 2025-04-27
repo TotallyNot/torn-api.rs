@@ -3,10 +3,9 @@ use std::future::Future;
 use http::{header::AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
 
-use crate::{
-    request::{ApiResponse, IntoRequest},
-    scopes::{FactionScope, ForumScope, MarketScope, RacingScope, TornScope, UserScope},
-};
+use crate::request::{ApiResponse, IntoRequest};
+#[cfg(feature = "scopes")]
+use crate::scopes::{FactionScope, ForumScope, MarketScope, RacingScope, TornScope, UserScope};
 
 pub trait Executor {
     type Error: From<serde_json::Error> + From<crate::ApiError> + Send;
@@ -73,6 +72,7 @@ impl ReqwestClient {
     }
 }
 
+#[cfg(feature = "scopes")]
 pub trait ExecutorExt: Executor + Sized {
     fn user(&self) -> UserScope<'_, Self>;
 
@@ -87,6 +87,7 @@ pub trait ExecutorExt: Executor + Sized {
     fn forum(&self) -> ForumScope<'_, Self>;
 }
 
+#[cfg(feature = "scopes")]
 impl<T> ExecutorExt for T
 where
     T: Executor + Sized,
@@ -144,6 +145,7 @@ mod test {
 
     use super::*;
 
+    #[cfg(feature = "scopes")]
     #[tokio::test]
     async fn api_error() {
         let client = test_client().await;
