@@ -206,7 +206,7 @@ impl Property {
                 let prim = match (schema.r#type, schema.format) {
                     (Some("integer"), Some("int32")) => PrimitiveType::I32,
                     (Some("integer"), Some("int64")) => PrimitiveType::I64,
-                    (Some("number"), Some("float")) => PrimitiveType::Float,
+                    (Some("number"), /* Some("float") */ _) => PrimitiveType::Float,
                     (Some("string"), None) => PrimitiveType::String,
                     (Some("boolean"), None) => PrimitiveType::Bool,
                     _ => return None,
