@@ -1,4 +1,6 @@
-use http::{HeaderMap, HeaderValue, header::AUTHORIZATION};
+use std::future::Future;
+
+use http::{header::AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
 
 use crate::{
@@ -138,7 +140,7 @@ impl Executor for ReqwestClient {
 
 #[cfg(test)]
 mod test {
-    use crate::{ApiError, Error, scopes::test::test_client};
+    use crate::{scopes::test::test_client, ApiError, Error};
 
     use super::*;
 
