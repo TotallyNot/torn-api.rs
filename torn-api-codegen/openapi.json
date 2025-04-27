@@ -8774,7 +8774,9 @@
                     "attacksrunaway",
                     "highestterritories",
                     "territoryrespect",
-                    "membersamount"
+                    "membersamount",
+                    "factionage",
+                    "upgradesamount"
                 ]
             },
             "FactionBranchStateEnum": {
@@ -15325,7 +15327,7 @@
                     "calendar",
                     "crimes",
                     "education",
-                    "factionHof",
+                    "factionhof",
                     "factiontree",
                     "hof",
                     "itemammo",
@@ -19336,7 +19338,7 @@
                 "properties": {
                     "value": {
                         "type": "integer",
-                        "format": "int32"
+                        "format": "int64"
                     },
                     "rank": {
                         "type": "integer",
@@ -19355,8 +19357,15 @@
                         "type": "string"
                     },
                     "rank": {
-                        "type": "integer",
-                        "format": "int32"
+                        "oneOf": [
+                            {
+                                "type": "number",
+                                "format": "int32"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
                     }
                 },
                 "type": "object"
