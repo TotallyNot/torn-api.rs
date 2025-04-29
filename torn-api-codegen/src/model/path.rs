@@ -492,7 +492,7 @@ impl Path {
                 self,
                 ids: I,
                 builder: B
-            ) -> impl futures::Stream<Item = (#disc_ty, Result<#response_ty, E::Error>)> + use<'e, E, S, I, B>
+            ) -> impl futures::Stream<Item = (#disc_ty, Result<#response_ty, E::Error>)>
             where
                 I: IntoIterator<Item = #disc_ty>,
                 S: #builder_mod_path::IsComplete,

@@ -65,21 +65,19 @@ impl Scope {
                 #(#functions)*
             }
 
-            pub struct #bulk_name<'e, E> where
-                E: crate::executor::BulkExecutor<'e>,
+            pub struct #bulk_name<E> where
+                E: crate::executor::BulkExecutor,
             {
                 executor: E,
-                marker: std::marker::PhantomData<&'e E>,
             }
 
-            impl<'e, E> #bulk_name<'e, E>
+            impl<E> #bulk_name<E>
             where
-                E: crate::executor::BulkExecutor<'e>
+                E: crate::executor::BulkExecutor
             {
                 pub fn new(executor: E) -> Self {
                     Self {
                         executor,
-                        marker: std::marker::PhantomData,
                     }
                 }
 

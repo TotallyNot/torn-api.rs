@@ -1,6 +1,6 @@
 [package]
 name = "torn-key-pool"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2021"
 authors = ["Pyrit [2111649]"]
 license-file = { workspace = true }
@@ -14,7 +14,7 @@ postgres = ["dep:sqlx", "dep:chrono", "dep:indoc"]
 tokio-runtime = ["dep:tokio", "dep:rand", "dep:tokio-stream"]
 
 [dependencies]
-torn-api = { path = "../torn-api", default-features = false, version = "1.0.1" }
+torn-api = { path = "../torn-api", default-features = false, version = "1.1.1" }
 thiserror = "2"
 
 sqlx = { version = "0.8", features = [

@@ -56,7 +56,7 @@ pub trait Executor: Sized {
     }
 }
 
-pub trait BulkExecutor<'e>: 'e + Sized {
+pub trait BulkExecutor: Sized {
     type Error: From<serde_json::Error> + From<crate::ApiError> + Send;
 
     fn execute<R>(
@@ -158,46 +158,46 @@ where
 }
 
 #[cfg(feature = "scopes")]
-pub trait BulkExecutorExt<'e>: BulkExecutor<'e> + Sized {
-    fn user_bulk(self) -> BulkUserScope<'e, Self>;
+pub trait BulkExecutorExt: BulkExecutor + Sized {
+    fn user_bulk(self) -> BulkUserScope<Self>;
 
-    fn faction_bulk(self) -> BulkFactionScope<'e, Self>;
+    fn faction_bulk(self) -> BulkFactionScope<Self>;
 
-    fn torn_bulk(self) -> BulkTornScope<'e, Self>;
+    fn torn_bulk(self) -> BulkTornScope<Self>;
 
-    fn market_bulk(self) -> BulkMarketScope<'e, Self>;
+    fn market_bulk(self) -> BulkMarketScope<Self>;
 
-    fn racing_bulk(self) -> BulkRacingScope<'e, Self>;
+    fn racing_bulk(self) -> BulkRacingScope<Self>;
 
-    fn forum_bulk(self) -> BulkForumScope<'e, Self>;
+    fn forum_bulk(self) -> BulkForumScope<Self>;
 }
 
 #[cfg(feature = "scopes")]
-impl<'e, T> BulkExecutorExt<'e> for T
+impl<'e, T> BulkExecutorExt for T
 where
-    T: BulkExecutor<'e> + Sized,
+    T: BulkExecutor + Sized,
 {
-    fn user_bulk(self) -> BulkUserScope<'e, Self> {
+    fn user_bulk(self) -> BulkUserScope<Self> {
         BulkUserScope::new(self)
     }
 
-    fn faction_bulk(self) -> BulkFactionScope<'e, Self> {
+    fn faction_bulk(self) -> BulkFactionScope<Self> {
         BulkFactionScope::new(self)
     }
 
-    fn torn_bulk(self) -> BulkTornScope<'e, Self> {
+    fn torn_bulk(self) -> BulkTornScope<Self> {
         BulkTornScope::new(self)
     }
 
-    fn market_bulk(self) -> BulkMarketScope<'e, Self> {
+    fn market_bulk(self) -> BulkMarketScope<Self> {
         BulkMarketScope::new(self)
     }
 
-    fn racing_bulk(self) -> BulkRacingScope<'e, Self> {
+    fn racing_bulk(self) -> BulkRacingScope<Self> {
         BulkRacingScope::new(self)
     }
 
-    fn forum_bulk(self) -> BulkForumScope<'e, Self> {
+    fn forum_bulk(self) -> BulkForumScope<Self> {
         BulkForumScope::new(self)
     }
 }
@@ -246,7 +246,7 @@ impl Executor for &ReqwestClient {
     }
 }
 
-impl<'e> BulkExecutor<'e> for &'e ReqwestClient {
+impl BulkExecutor for &ReqwestClient {
     type Error = crate::Error;
 
     fn execute<R>(

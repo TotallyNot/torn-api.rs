@@ -560,7 +560,7 @@ where
     }
 }
 
-impl<'p, S> BulkExecutor<'p> for KeyPoolExecutor<'p, S>
+impl<S> BulkExecutor for KeyPoolExecutor<'_, S>
 where
     S: KeyPoolStorage + 'static,
 {
@@ -631,7 +631,7 @@ where
     }
 }
 
-impl<'p, S> BulkExecutor<'p> for ThrottledKeyPoolExecutor<'p, S>
+impl<S> BulkExecutor for ThrottledKeyPoolExecutor<'_, S>
 where
     S: KeyPoolStorage + 'static,
 {

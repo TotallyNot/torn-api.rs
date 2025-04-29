@@ -1,6 +1,6 @@
 [package]
 name = "torn-api"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2021"
 description = "Auto-generated bindings for the v2 torn api"
 license-file = { workspace = true }
@@ -36,7 +36,7 @@ futures = { version = "0.3", default-features = false, features = [
 tokio = { version = "1", features = ["full"] }
 
 [build-dependencies]
-torn-api-codegen = { path = "../torn-api-codegen", version = "0.2" }
+torn-api-codegen = { path = "../torn-api-codegen", version = "0.2.1" }
 syn = { workspace = true, features = ["parsing"] }
 proc-macro2 = { workspace = true }
 prettyplease = "0.2"
