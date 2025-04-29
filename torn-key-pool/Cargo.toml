@@ -1,6 +1,6 @@
 [package]
 name = "torn-key-pool"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 authors = ["Pyrit [2111649]"]
 license-file = { workspace = true }
@@ -11,7 +11,7 @@ description = "A generalised API key pool for torn-api"
 [features]
 default = ["postgres", "tokio-runtime"]
 postgres = ["dep:sqlx", "dep:chrono", "dep:indoc"]
-tokio-runtime = ["dep:tokio", "dep:rand"]
+tokio-runtime = ["dep:tokio", "dep:rand", "dep:tokio-stream"]
 
 [dependencies]
 torn-api = { path = "../torn-api", default-features = false, version = "1.0.1" }
@@ -28,6 +28,9 @@ serde_json = { workspace = true }
 chrono = { version = "0.4", optional = true }
 indoc = { version = "2", optional = true }
 tokio = { version = "1", optional = true, default-features = false, features = [
+    "time",
+] }
+tokio-stream = { version = "0.1", optional = true, default-features = false, features = [
     "time",
 ] }
 rand = { version = "0.9", optional = true }

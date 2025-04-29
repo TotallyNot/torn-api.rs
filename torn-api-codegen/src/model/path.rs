@@ -284,15 +284,18 @@ impl Path {
                 #[allow(unused_parens)]
                 type Discriminant = (#(#discriminant),*);
                 type Response = #response_ty;
-                fn into_request(self) -> crate::request::ApiRequest<Self::Discriminant> {
+                fn into_request(self) -> (Self::Discriminant, crate::request::ApiRequest) {
+                    let path = format!(#path_fmt_str, #(#fmt_val),*);
                     #[allow(unused_parens)]
-                    crate::request::ApiRequest {
-                        path: format!(#path_fmt_str, #(#fmt_val),*),
-                        parameters: std::iter::empty()
-                            #(#convert_field)*
-                            .collect(),
-                        disriminant:  (#(#discriminant_val),*),
-                    }
+                    (
+                        (#(#discriminant_val),*),
+                        crate::request::ApiRequest {
+                            path,
+                            parameters: std::iter::empty()
+                                #(#convert_field)*
+                                .collect(),
+                        }
+                    )
                 }
             }
         })
@@ -376,7 +379,7 @@ impl Path {
 
         Some(quote! {
             pub async fn #fn_name<S>(
-                &self,
+                self,
                 #(#extra_args)*
                 builder: impl FnOnce(
                     #builder_path<#builder_mod_path::Empty>
@@ -388,6 +391,120 @@ impl Path {
                 let r = builder(#request_path::builder(#(#disc),*)).build();
 
                 self.0.fetch(r).await
+            }
+        })
+    }
+
+    pub fn codegen_bulk_scope_call(&self) -> Option<TokenStream> {
+        let mut disc = Vec::new();
+        let mut disc_ty = Vec::new();
+
+        let snake_name = self.name.to_snake_case();
+
+        let request_name = format_ident!("{}Request", self.name);
+        let builder_name = format_ident!("{}RequestBuilder", self.name);
+        let builder_mod_name = format_ident!("{}_request_builder", snake_name);
+        let request_mod_name = format_ident!("{snake_name}");
+
+        let request_path = quote! { crate::request::models::#request_name };
+        let builder_path = quote! { crate::request::models::#builder_name };
+        let builder_mod_path = quote! { crate::request::models::#builder_mod_name };
+
+        let tail = snake_name
+            .split_once('_')
+            .map_or_else(|| "for_selections".to_owned(), |(_, tail)| tail.to_owned());
+
+        let fn_name = format_ident!("{tail}");
+
+        for param in &self.parameters {
+            let (param, is_inline) = match param {
+                PathParameter::Inline(param) => (param, true),
+                PathParameter::Component(param) => (param, false),
+            };
+
+            if param.location == ParameterLocation::Path {
+                let ty = match &param.r#type {
+                    ParameterType::I32 { .. } | ParameterType::Enum { .. } => {
+                        let ty_name = format_ident!("{}", param.name);
+
+                        if is_inline {
+                            quote! {
+                                crate::request::models::#request_mod_name::#ty_name
+                            }
+                        } else {
+                            quote! {
+                                crate::parameters::#ty_name
+                            }
+                        }
+                    }
+                    ParameterType::String => quote! { String },
+                    ParameterType::Boolean => quote! { bool },
+                    ParameterType::Schema { type_name } => {
+                        let ty_name = format_ident!("{}", type_name);
+
+                        quote! {
+                            crate::models::#ty_name
+                        }
+                    }
+                    ParameterType::Array { .. } => param.r#type.codegen_type_name(&param.name),
+                };
+
+                let arg_name = format_ident!("{}", param.value.to_snake_case());
+
+                disc_ty.push(ty);
+                disc.push(arg_name);
+            }
+        }
+
+        if disc.is_empty() {
+            return None;
+        }
+
+        let response_ty = match &self.response {
+            PathResponse::Component { name } => {
+                let name = format_ident!("{name}");
+                quote! {
+                    crate::models::#name
+                }
+            }
+            PathResponse::ArbitraryUnion(union) => {
+                let name = format_ident!("{}", union.name);
+                quote! {
+                    crate::request::models::#request_mod_name::#name
+                }
+            }
+        };
+
+        let disc = if disc.len() > 1 {
+            quote! { (#(#disc),*) }
+        } else {
+            quote! { #(#disc),* }
+        };
+
+        let disc_ty = if disc_ty.len() > 1 {
+            quote! { (#(#disc_ty),*) }
+        } else {
+            quote! { #(#disc_ty),* }
+        };
+
+        Some(quote! {
+            pub fn #fn_name<S, I, B>(
+                self,
+                ids: I,
+                builder: B
+            ) -> impl futures::Stream<Item = (#disc_ty, Result<#response_ty, E::Error>)> + use<'e, E, S, I, B>
+            where
+                I: IntoIterator<Item = #disc_ty>,
+                S: #builder_mod_path::IsComplete,
+                B: Fn(
+                    #builder_path<#builder_mod_path::Empty>
+                ) -> #builder_path<S>,
+            {
+                let requests = ids.into_iter()
+                    .map(move |#disc| builder(#request_path::builder(#disc)).build());
+
+                let executor = self.executor;
+                executor.fetch_many(requests)
             }
         })
     }

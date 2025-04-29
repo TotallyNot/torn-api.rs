@@ -1,7 +1,7 @@
 [package]
 name = "torn-api-codegen"
 authors = ["Pyrit [2111649]"]
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
 description = "Contains the v2 torn API model descriptions and codegen for the bindings"
 license-file = { workspace = true }

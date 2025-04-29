@@ -2271,10 +2271,11 @@ dependencies = [
 
 [[package]]
 name = "torn-api"
-version = "1.0.3"
+version = "1.1.0"
 dependencies = [
  "bon",
  "bytes",
+ "futures",
  "http",
  "prettyplease",
  "proc-macro2",
@@ -2290,7 +2291,7 @@ dependencies = [
 
 [[package]]
 name = "torn-api-codegen"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "heck",
  "indexmap",
@@ -2303,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "torn-key-pool"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "chrono",
  "futures",
@@ -2315,6 +2316,7 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "torn-api",
 ]
 

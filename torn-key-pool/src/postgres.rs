@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use futures::future::BoxFuture;
 use indoc::formatdoc;
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
@@ -37,6 +39,9 @@ where
 
     #[error("Key not found: '{0:?}'")]
     KeyNotFound(KeySelector<PgKey<D>, D>),
+
+    #[error("Failed to acquire keys in bulk: {0}")]
+    Bulk(#[from] Arc<Self>),
 }
 
 #[derive(Debug, Clone, FromRow)]
